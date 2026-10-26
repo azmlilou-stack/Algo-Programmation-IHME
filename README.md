@@ -7,7 +7,7 @@ Application web de suivi des demandes et des résultats de tests sur les produit
 
 Aujourd'hui, les test du labo sont réalisés dans l'urgence, au dernier moment, et les équipes de test ont du 
 mal à s'intégrer au projet développement produit. Les résultats des tests sont mal exploités par les ingénieurs
-produits et retardent les délais de développement.].
+produits et retardent les délais de développement.
 Cette application centralise le processus entre les ingénieurs produits et l'équipe test.
 
 ## Utilisateurs
