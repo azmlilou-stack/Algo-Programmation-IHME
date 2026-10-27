@@ -45,6 +45,7 @@ describe("validation des entrées", () => {
         testFamily: "Thermique",
         dueDate: "2027-01-15",
         priority: "high",
+        assignedOperatorId: null,
       },
     );
   });
@@ -61,6 +62,24 @@ describe("validation des entrées", () => {
     assert.throws(() => validateRequest({ ...validRequest, quantity: 1.5 }));
     assert.throws(() => validateRequest({ ...validRequest, testFamily: "Chimique" }));
     assert.throws(() => validateRequest(null));
+  });
+
+  it("valide une affectation opérateur facultative", () => {
+    const validRequest = {
+      productReference: "PRD-14",
+      quantity: 1,
+      testFamily: "Impact",
+      dueDate: "2027-02-28",
+      priority: "normal",
+    };
+    const operatorId = "ea8fc84b-ecc8-4ea6-9c88-ef62c0e72011";
+    assert.equal(
+      validateRequest({ ...validRequest, assignedOperatorId: operatorId }).assignedOperatorId,
+      operatorId,
+    );
+    assert.throws(() =>
+      validateRequest({ ...validRequest, assignedOperatorId: "not-an-id" }),
+    );
   });
 
   it("n’accepte que les verdicts prévus et un commentaire non vide", () => {
@@ -87,6 +106,9 @@ describe("API", () => {
         };
       }
       if (sql === "SELECT 1") return { rows: [{ "?column?": 1 }] };
+      if (sql.includes("UPDATE test_requests SET status = 'scheduled'")) {
+        return { rows: [], rowCount: 0 };
+      }
       throw new Error(`Requête non simulée dans ce test : ${sql}`);
     },
   };
@@ -112,12 +134,110 @@ describe("API", () => {
     await request(app).get("/api/requests").expect(401);
   });
 
+  it("réserve la liste des opérateurs aux ingénieurs connectés", async () => {
+    await request(app).get("/api/operators").expect(401);
+    await request(app)
+      .get("/api/operators")
+      .set("Cookie", "ihme_session=operator-session")
+      .expect(403);
+  });
+
   it("réserve la création de demande aux ingénieurs", async () => {
     await request(app)
       .post("/api/requests")
       .set("Cookie", "ihme_session=test-session")
       .send({})
       .expect(403);
+  });
+
+  it("permet à un ingénieur de lister les opérateurs et d’assigner une demande", async () => {
+    const engineer = {
+      id: "ea8fc84b-ecc8-4ea6-9c88-ef62c0e72012",
+      name: "Alex Martin",
+      email: "alex@example.com",
+      role: "engineer",
+    };
+    const operator = {
+      id: "ea8fc84b-ecc8-4ea6-9c88-ef62c0e72011",
+      name: "Opérateur Test",
+    };
+    const createdRequests = [];
+    const engineerDb = {
+      async query(sql, values = []) {
+        if (sql.includes("FROM sessions s JOIN users u")) {
+          return { rows: [engineer] };
+        }
+        if (sql.includes("SELECT id, name FROM users WHERE role = 'operator'")) {
+          return { rows: [operator] };
+        }
+        if (sql.includes("SELECT id FROM users WHERE id = $1 AND role = 'operator'")) {
+          const rows = values[0] === operator.id ? [{ id: operator.id }] : [];
+          return { rows, rowCount: rows.length };
+        }
+        if (sql.includes("INSERT INTO test_requests")) {
+          createdRequests.push(values);
+          return {
+            rows: [{
+              id: `request-${createdRequests.length}`,
+              requester_id: engineer.id,
+              assigned_operator_id: values[6],
+              status: "requested",
+            }],
+          };
+        }
+        throw new Error(`Requête non simulée dans ce test : ${sql}`);
+      },
+    };
+    const engineerApp = createApp(engineerDb, {
+      secureCookie: false,
+      staticDirectory: "/tmp/ihme-test-static",
+    });
+    const cookie = "ihme_session=engineer-session";
+
+    const operatorList = await request(engineerApp)
+      .get("/api/operators")
+      .set("Cookie", cookie)
+      .expect(200);
+    assert.deepEqual(operatorList.body.operators, [operator]);
+
+    const requestBody = {
+      productReference: "PRD-15",
+      quantity: 2,
+      testFamily: "Impact",
+      dueDate: "2027-02-28",
+      priority: "normal",
+      assignedOperatorId: operator.id,
+    };
+    const assigned = await request(engineerApp)
+      .post("/api/requests")
+      .set("Cookie", cookie)
+      .send(requestBody)
+      .expect(201);
+    assert.equal(assigned.body.request.assigned_operator_id, operator.id);
+    assert.equal(createdRequests[0][6], operator.id);
+
+    const unassigned = await request(engineerApp)
+      .post("/api/requests")
+      .set("Cookie", cookie)
+      .send({ ...requestBody, assignedOperatorId: "" })
+      .expect(201);
+    assert.equal(unassigned.body.request.assigned_operator_id, null);
+    assert.equal(createdRequests[1][6], null);
+
+    await request(engineerApp)
+      .post("/api/requests")
+      .set("Cookie", cookie)
+      .send({ ...requestBody, assignedOperatorId: "ea8fc84b-ecc8-4ea6-9c88-ef62c0e72013" })
+      .expect(400);
+  });
+
+  it("empêche un autre opérateur de planifier une demande déjà assignée", async () => {
+    const response = await request(app)
+      .patch("/api/requests/ea8fc84b-ecc8-4ea6-9c88-ef62c0e72013/schedule")
+      .set("Cookie", "ihme_session=operator-session")
+      .send({ scheduledDate: "2027-02-20" })
+      .expect(409);
+    assert.match(response.body.error, /disponible à la planification/);
   });
 
   it("crée uniquement un compte ingénieur et gère une session jusqu’à la déconnexion", async () => {

@@ -507,9 +507,20 @@ function RequestModal({ onClose, onSubmit }) {
     testFamily: TEST_FAMILIES[0],
     dueDate: "",
     priority: "normal",
+    assignedOperatorId: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [operators, setOperators] = useState([]);
+  const [operatorsLoading, setOperatorsLoading] = useState(true);
+  const [operatorsError, setOperatorsError] = useState("");
+
+  useEffect(() => {
+    api("/operators")
+      .then((payload) => setOperators(payload.operators))
+      .catch((caught) => setOperatorsError(caught.message))
+      .finally(() => setOperatorsLoading(false));
+  }, []);
 
   async function submit(event) {
     event.preventDefault();
@@ -598,6 +609,37 @@ function RequestModal({ onClose, onSubmit }) {
               </select>
             </label>
           </div>
+          <label>
+            Opérateur assigné <span className="optional-label">Optionnel</span>
+            <select
+              value={form.assignedOperatorId}
+              disabled={operatorsLoading || Boolean(operatorsError)}
+              onChange={(event) =>
+                setForm({ ...form, assignedOperatorId: event.target.value })
+              }
+            >
+              <option value="">Laisser la demande ouverte à l’équipe</option>
+              {operators.map((operator) => (
+                <option key={operator.id} value={operator.id}>
+                  {operator.name}
+                </option>
+              ))}
+            </select>
+            {operatorsLoading && (
+              <small className="field-hint">Chargement des opérateurs…</small>
+            )}
+            {operatorsError && (
+              <small className="field-hint field-hint-error" role="status">
+                Impossible de charger les opérateurs : {operatorsError} Vous pouvez
+                créer une demande non assignée.
+              </small>
+            )}
+            {!operatorsLoading && !operatorsError && operators.length === 0 && (
+              <small className="field-hint">
+                Aucun compte opérateur n’a encore été créé.
+              </small>
+            )}
+          </label>
           <div className="modal-actions">
             <button type="button" className="button button-quiet" onClick={onClose}>Annuler</button>
             <button className="button button-primary" disabled={saving}>

@@ -64,6 +64,10 @@ export function validateRegistration(input = {}) {
 
 export function validateRequest(input = {}) {
   const body = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  const assignedOperatorId =
+    body.assignedOperatorId === undefined || body.assignedOperatorId === ""
+      ? null
+      : body.assignedOperatorId;
   const productReference =
     typeof body.productReference === "string" ? body.productReference.trim() : "";
   const quantity = Number(body.quantity);
@@ -88,8 +92,21 @@ export function validateRequest(input = {}) {
   if (!PRIORITIES.has(body.priority)) {
     throw httpError(400, "Le niveau de priorité n’est pas reconnu.");
   }
+  if (assignedOperatorId !== null && (
+    typeof assignedOperatorId !== "string" ||
+    !UUID_PATTERN.test(assignedOperatorId)
+  )) {
+    throw httpError(400, "L’opérateur sélectionné est invalide.");
+  }
 
-  return { productReference, quantity, testFamily: body.testFamily, dueDate, priority: body.priority };
+  return {
+    productReference,
+    quantity,
+    testFamily: body.testFamily,
+    dueDate,
+    priority: body.priority,
+    assignedOperatorId,
+  };
 }
 
 export function validateResult(input = {}) {
@@ -213,6 +230,17 @@ export function createApp(db, options = {}) {
     }
   });
 
+  app.get("/api/operators", requireRole("engineer"), async (_req, res, next) => {
+    try {
+      const result = await db.query(
+        `SELECT id, name FROM users WHERE role = 'operator' ORDER BY name`,
+      );
+      res.json({ operators: result.rows });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get("/api/requests", requireUser, async (req, res, next) => {
     try {
       const result =
@@ -234,12 +262,22 @@ export function createApp(db, options = {}) {
   app.post("/api/requests", requireRole("engineer"), async (req, res, next) => {
     try {
       const request = validateRequest(req.body);
+      if (request.assignedOperatorId) {
+        const operator = await db.query(
+          `SELECT id FROM users WHERE id = $1 AND role = 'operator'`,
+          [request.assignedOperatorId],
+        );
+        if (!operator.rowCount) {
+          throw httpError(400, "L’opérateur sélectionné n’existe pas ou n’a pas le rôle opérateur.");
+        }
+      }
       const result = await db.query(
         `INSERT INTO test_requests
-          (requester_id, product_reference, quantity, test_family, due_date, priority)
-         VALUES ($1, $2, $3, $4, $5, $6)
+          (requester_id, product_reference, quantity, test_family, due_date, priority,
+           assigned_operator_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, requester_id, product_reference, quantity, test_family,
-           due_date, priority, status, created_at`,
+           due_date, priority, status, assigned_operator_id, created_at`,
         [
           req.user.id,
           request.productReference,
@@ -247,6 +285,7 @@ export function createApp(db, options = {}) {
           request.testFamily,
           request.dueDate,
           request.priority,
+          request.assignedOperatorId,
         ],
       );
       res.status(201).json({ request: result.rows[0] });
@@ -269,8 +308,10 @@ export function createApp(db, options = {}) {
       }
       const result = await db.query(
         `UPDATE test_requests SET status = 'scheduled', scheduled_date = $1,
-          assigned_operator_id = $2, updated_at = now()
-         WHERE id = $3 AND status = 'requested' RETURNING id`,
+          assigned_operator_id = COALESCE(assigned_operator_id, $2), updated_at = now()
+         WHERE id = $3 AND status = 'requested'
+           AND (assigned_operator_id IS NULL OR assigned_operator_id = $2)
+         RETURNING id`,
         [scheduledDate, req.user.id, id],
       );
       if (!result.rowCount) throw httpError(409, "Cette demande n’est plus disponible à la planification.");

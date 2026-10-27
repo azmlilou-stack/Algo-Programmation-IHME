@@ -52,7 +52,7 @@ Le verdict (Conforme ou Non conforme) est enregistré avec le résultat et reste
 | Famille de test | Catégorie du test demandé. |
 | Date limite | Date à laquelle le test doit être réalisé au plus tard. |
 | Priorité | Niveau d'urgence de la demande. |
-| Testeur préconisé | Opérateur suggéré par le demandeur, le cas échéant. |
+| Opérateur assigné | Opérateur responsable, choisi à la création ; facultatif si la demande reste ouverte à l'équipe. |
 | Planification | Date planifiée et opérateur en charge du test. |
 | Demandeur et dates de suivi | Informations de création et de mise à jour conservées par l'application. |
 
@@ -78,6 +78,8 @@ La conception devra permettre de faire évoluer cette liste sans remettre en cau
 
 - Une demande est créée par un ingénieur produit authentifié.
 - Une demande identifie son produit, sa quantité, sa famille de test, sa priorité et sa date limite.
+- Le demandeur peut assigner un opérateur existant à la création ; sinon, tout opérateur disponible peut planifier la demande.
+- Une demande déjà assignée ne peut être planifiée que par l'opérateur désigné.
 - L'opérateur renseigne le verdict et son commentaire avant l'envoi en validation.
 - Seul l'ingénieur demandeur valide et clôture sa demande.
 - Une demande non clôturée conserve son statut d'avancement ; une demande clôturée conserve son verdict final.

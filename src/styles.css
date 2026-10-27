@@ -461,6 +461,8 @@ html[data-theme="dark"] .auth-switch { color: #a3b0a6; }
 html[data-theme="dark"] .auth-switch button { color: #a8d1b3; }
 html[data-theme="dark"] .field-hint,
 html[data-theme="dark"] .auth-legal { color: #85948a; }
+html[data-theme="dark"] .optional-label { color: #9baa9f; }
+html[data-theme="dark"] .field-hint-error { color: #f0b0a7; }
 
 .theme-toggle {
   display: inline-flex;
@@ -482,6 +484,8 @@ html[data-theme="dark"] .auth-legal { color: #85948a; }
 .account { gap: 10px; }
 .auth-panel { position: relative; }
 .auth-tools { position: absolute; top: 26px; right: 30px; }
+.optional-label { display: inline-block; margin-left: 5px; color: #87958c; font-size: 10px; font-weight: 400; }
+.field-hint-error { color: #a64e43; font-weight: 400; line-height: 1.5; }
 html[data-theme="dark"] .theme-toggle {
   color: #c4d6c9;
   border-color: #39483e;
