@@ -22,6 +22,16 @@ const REQUEST_FILTERS = [
   { value: "done", label: "Terminées" },
 ];
 
+function getInitialTheme() {
+  try {
+    const savedTheme = window.localStorage.getItem("ihme-theme");
+    if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
+  } catch {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 async function api(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: "same-origin",
@@ -48,6 +58,7 @@ async function api(path, options = {}) {
 }
 
 function App() {
+  const [theme, setTheme] = useState(getInitialTheme);
   const [user, setUser] = useState(null);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +66,20 @@ function App() {
   const [view, setView] = useState("all");
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    try {
+      window.localStorage.setItem("ihme-theme", theme);
+    } catch {
+      // The selected theme remains active for the current page view.
+    }
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((currentTheme) => (currentTheme === "light" ? "dark" : "light"));
+  }
 
   const refresh = useCallback(async () => {
     const [session, requestList] = await Promise.all([
@@ -107,6 +132,8 @@ function App() {
     return (
       <AuthScreen
         serverError={error}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onAuthenticated={(authenticatedUser) => {
           setUser(authenticatedUser);
           refresh().catch((caught) => setError(caught.message));
@@ -146,6 +173,7 @@ function App() {
           </span>
         </a>
         <div className="account">
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
           <span className="avatar">{user.name.slice(0, 1).toUpperCase()}</span>
           <span className="account-copy">
             <strong>{user.name}</strong>
@@ -309,6 +337,25 @@ function SummaryCard({ label, value, icon, tone, index }) {
         <strong>{value}</strong>
       </div>
     </article>
+  );
+}
+
+function ThemeToggle({ theme, onToggle }) {
+  const isDark = theme === "dark";
+  return (
+    <button
+      className="theme-toggle"
+      type="button"
+      aria-label={isDark ? "Activer le mode jour" : "Activer le mode nuit"}
+      aria-pressed={isDark}
+      title={isDark ? "Mode nuit activé" : "Mode jour activé"}
+      onClick={onToggle}
+    >
+      <span className="theme-toggle-icon" aria-hidden="true">
+        {isDark ? "☀" : "☾"}
+      </span>
+      <span className="theme-toggle-label">{isDark ? "Mode jour" : "Mode nuit"}</span>
+    </button>
   );
 }
 
@@ -563,7 +610,7 @@ function RequestModal({ onClose, onSubmit }) {
   );
 }
 
-function AuthScreen({ onAuthenticated, serverError }) {
+function AuthScreen({ onAuthenticated, serverError, theme, onToggleTheme }) {
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -604,6 +651,9 @@ function AuthScreen({ onAuthenticated, serverError }) {
         <p className="auth-caption">Impact · Thermique · Mécanique</p>
       </div>
       <section className="auth-panel">
+        <div className="auth-tools">
+          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+        </div>
         <div className="auth-form-wrap">
           <p className="eyebrow">ESPACE SÉCURISÉ</p>
           <h2>{mode === "login" ? "Ravi de vous revoir." : "Créer un compte ingénieur."}</h2>
