@@ -15,6 +15,12 @@ const PRIORITY_LABELS = {
   high: "Haute",
   urgent: "Urgente",
 };
+const REQUEST_FILTERS = [
+  { value: "all", label: "Toutes" },
+  { value: "open", label: "En cours" },
+  { value: "pending_validation", label: "À valider" },
+  { value: "done", label: "Terminées" },
+];
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -47,6 +53,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState("all");
+  const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -68,10 +75,20 @@ function App() {
   }, [refresh]);
 
   const visibleRequests = useMemo(() => {
-    if (view === "all") return requests;
-    if (view === "open") return requests.filter((item) => item.status !== "done");
-    return requests.filter((item) => item.status === view);
-  }, [requests, view]);
+    const query = search.trim().toLocaleLowerCase("fr");
+    return requests.filter((item) => {
+      const matchesView =
+        view === "all" ||
+        (view === "open" && item.status !== "done") ||
+        item.status === view;
+      const matchesSearch =
+        !query ||
+        [item.product_reference, item.test_family, item.requester_name]
+          .filter(Boolean)
+          .some((value) => value.toLocaleLowerCase("fr").includes(query));
+      return matchesView && matchesSearch;
+    });
+  }, [requests, search, view]);
 
   async function perform(action) {
     setError("");
@@ -99,10 +116,24 @@ function App() {
   }
 
   const isOperator = user.role === "operator";
-  const openCount = requests.filter((item) => item.status !== "done").length;
-  const validationCount = requests.filter(
-    (item) => item.status === "pending_validation",
+  const statusCount = (status) =>
+    requests.filter((item) => item.status === status).length;
+  const inProgressCount = requests.filter((item) =>
+    ["scheduled", "in_progress"].includes(item.status),
   ).length;
+  const metrics = isOperator
+    ? [
+        { label: "À planifier", value: statusCount("requested"), icon: "＋", tone: "sand" },
+        { label: "Essais en cours", value: inProgressCount, icon: "◷", tone: "blue" },
+        { label: "À transmettre", value: statusCount("pending_validation"), icon: "↗", tone: "gold" },
+        { label: "Terminées", value: statusCount("done"), icon: "✓", tone: "green" },
+      ]
+    : [
+        { label: "Toutes mes demandes", value: requests.length, icon: "▤", tone: "green" },
+        { label: "En traitement", value: inProgressCount, icon: "◷", tone: "blue" },
+        { label: "À valider", value: statusCount("pending_validation"), icon: "✓", tone: "gold" },
+        { label: "Terminées", value: statusCount("done"), icon: "✓", tone: "sand" },
+      ];
 
   return (
     <main className="app-shell">
@@ -138,49 +169,83 @@ function App() {
       </header>
 
       <section className="welcome">
-        <div>
+        <div className="welcome-copy">
           <p className="eyebrow">ESPACE {isOperator ? "LABORATOIRE" : "PRODUIT"}</p>
-          <h1>Bonjour, {user.name.split(" ")[0]}.</h1>
-          <p className="muted">
+          <h1>
+            Bonjour, {user.name.split(" ")[0]}
+            <span className="welcome-period">.</span>
+          </h1>
+          <p className="welcome-description">
             {isOperator
-              ? "Retrouvez les demandes et consignez les résultats de vos essais."
-              : "Suivez vos demandes de test, de la planification à la validation."}
+              ? "Vos prochains essais et résultats, réunis au même endroit."
+              : "De la demande au résultat validé, gardez un œil sur chaque essai."}
           </p>
+          <div className="welcome-note">
+            <span className="welcome-note-mark">✳</span>
+            <span>Des essais mieux suivis, des décisions produit plus sereines.</span>
+          </div>
         </div>
         {!isOperator && (
-          <button className="button button-primary" onClick={() => setShowForm(true)}>
-            <span aria-hidden="true">＋</span> Nouvelle demande
-          </button>
+          <div className="welcome-action">
+            <span>Un nouveau besoin au laboratoire ?</span>
+            <button className="button button-primary" onClick={() => setShowForm(true)}>
+              <span aria-hidden="true">＋</span> Créer une demande
+            </button>
+          </div>
         )}
       </section>
 
       {error && <div className="alert alert-error">{error}</div>}
 
       <section className="summary-grid" aria-label="Résumé des demandes">
-        <SummaryCard label="Demandes visibles" value={requests.length} icon="▤" />
-        <SummaryCard label="En cours" value={openCount} icon="◷" />
-        <SummaryCard
-          label={isOperator ? "À traiter" : "À valider"}
-          value={validationCount}
-          icon="✓"
-          accent
-        />
+        {metrics.map((metric, index) => (
+          <SummaryCard key={metric.label} {...metric} index={index} />
+        ))}
       </section>
 
       <section className="list-section">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">VOTRE ACTIVITÉ</p>
+            <p className="eyebrow">SUIVI DU LABORATOIRE</p>
             <h2>{isOperator ? "Demandes du laboratoire" : "Mes demandes"}</h2>
+            <p className="section-description">
+              {isOperator
+                ? "Priorisez les essais et mettez à jour leur avancement."
+                : "Retrouvez le statut et les résultats de vos demandes."}
+            </p>
           </div>
-          <label className="filter-control">
-            <span className="sr-only">Filtrer les demandes</span>
-            <select value={view} onChange={(event) => setView(event.target.value)}>
-              <option value="all">Toutes les demandes</option>
-              <option value="open">Demandes ouvertes</option>
-              <option value="pending_validation">À valider</option>
-              <option value="done">Terminées</option>
-            </select>
+        </div>
+        <div className="list-toolbar">
+          <div className="filter-tabs" role="group" aria-label="Filtrer les demandes">
+            {REQUEST_FILTERS.map((filter) => (
+              <button
+                key={filter.value}
+                className={`filter-tab${view === filter.value ? " filter-tab-active" : ""}`}
+                aria-pressed={view === filter.value}
+                onClick={() => setView(filter.value)}
+              >
+                {filter.value === "pending_validation" && isOperator
+                  ? "À transmettre"
+                  : filter.label}
+                <span>
+                  {filter.value === "all"
+                    ? requests.length
+                    : filter.value === "open"
+                      ? requests.filter((item) => item.status !== "done").length
+                      : statusCount(filter.value)}
+                </span>
+              </button>
+            ))}
+          </div>
+          <label className="search-control">
+            <span aria-hidden="true">⌕</span>
+            <span className="sr-only">Rechercher une demande</span>
+            <input
+              type="search"
+              placeholder="Référence, essai…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
           </label>
         </div>
         {visibleRequests.length ? (
@@ -196,12 +261,22 @@ function App() {
           </div>
         ) : (
           <div className="empty-state">
-            <span className="empty-icon">⌕</span>
-            <h3>Aucune demande pour le moment</h3>
+            <span className="empty-icon">{search ? "⌕" : "✳"}</span>
+            <h3>
+              {search
+                ? "Aucune demande ne correspond"
+                : requests.length
+                  ? "Rien dans cette sélection"
+                  : "Aucune demande pour le moment"}
+            </h3>
             <p>
-              {isOperator
-                ? "Les demandes disponibles apparaîtront ici."
-                : "Créez une demande pour lancer un essai au laboratoire."}
+              {search
+                ? "Essayez une autre référence ou un autre terme de recherche."
+                : requests.length
+                  ? "Choisissez un autre filtre pour consulter les demandes."
+                  : isOperator
+                    ? "Les demandes disponibles apparaîtront ici."
+                    : "Créez une demande pour lancer un essai au laboratoire."}
             </p>
           </div>
         )}
@@ -222,10 +297,13 @@ function App() {
   );
 }
 
-function SummaryCard({ label, value, icon, accent }) {
+function SummaryCard({ label, value, icon, tone, index }) {
   return (
-    <article className={`summary-card${accent ? " summary-card-accent" : ""}`}>
-      <span className="summary-icon">{icon}</span>
+    <article
+      className={`summary-card summary-card-${tone}`}
+      style={{ "--card-order": index }}
+    >
+      <span className="summary-icon" aria-hidden="true">{icon}</span>
       <div>
         <p>{label}</p>
         <strong>{value}</strong>
