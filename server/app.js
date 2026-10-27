@@ -14,7 +14,7 @@ const VERDICTS = new Set(["conforming", "non_conforming"]);
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const publicUserFields = "id, name, email, role";
+const publicUserFields = "id, name, email, role, must_change_password";
 const requestSelect = `
   SELECT r.id, r.requester_id, r.product_reference, r.quantity, r.test_family,
     r.due_date, r.priority, r.status, r.assigned_operator_id, r.scheduled_date,
@@ -140,7 +140,7 @@ export function createApp(db, options = {}) {
       const token = parseCookies(req.headers.cookie)[SESSION_COOKIE];
       if (token) {
         const result = await db.query(
-          `SELECT u.id, u.name, u.email, u.role
+          `SELECT u.id, u.name, u.email, u.role, u.must_change_password
            FROM sessions s JOIN users u ON u.id = s.user_id
            WHERE s.token_hash = $1 AND s.expires_at > now()`,
           [hashToken(token)],
@@ -198,15 +198,24 @@ export function createApp(db, options = {}) {
         throw httpError(400, "Adresse e-mail ou mot de passe invalide.");
       }
       const found = await db.query(
-        `SELECT id, name, email, password_hash, role FROM users WHERE email = $1`,
+        `SELECT id, name, email, password_hash, role, must_change_password
+         FROM users WHERE email = $1`,
         [email],
       );
       const user = found.rows[0];
-      if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      if (!user?.password_hash || !(await bcrypt.compare(password, user.password_hash))) {
         throw httpError(401, "Adresse e-mail ou mot de passe incorrect.");
       }
       await createSession(db, user.id, res, secureCookie, cookiePath);
-      res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+      res.json({
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          must_change_password: user.must_change_password,
+        },
+      });
     } catch (error) {
       next(error);
     }
@@ -230,12 +239,80 @@ export function createApp(db, options = {}) {
     }
   });
 
+  app.post("/api/auth/change-password", requireUser, async (req, res, next) => {
+    try {
+      const currentPassword =
+        typeof req.body?.currentPassword === "string" ? req.body.currentPassword : "";
+      const newPassword =
+        typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
+      if (newPassword.length < 12 || Buffer.byteLength(newPassword, "utf8") > 72) {
+        throw httpError(400, "Le nouveau mot de passe doit contenir entre 12 et 72 octets.");
+      }
+
+      const found = await db.query(
+        "SELECT password_hash FROM users WHERE id = $1",
+        [req.user.id],
+      );
+      if (
+        !found.rows[0]?.password_hash ||
+        !(await bcrypt.compare(currentPassword, found.rows[0].password_hash))
+      ) {
+        throw httpError(401, "Le mot de passe temporaire est incorrect.");
+      }
+      const passwordHash = await bcrypt.hash(newPassword, 12);
+      await db.query(
+        `UPDATE users SET password_hash = $1, must_change_password = false
+         WHERE id = $2`,
+        [passwordHash, req.user.id],
+      );
+      res.json({ changed: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.use("/api", (req, _res, next) => {
+    if (
+      req.user?.must_change_password &&
+      !["/auth/me", "/auth/logout", "/auth/change-password"].includes(req.path)
+    ) {
+      return next(
+        httpError(403, "Changez votre mot de passe temporaire pour continuer."),
+      );
+    }
+    next();
+  });
+
   app.get("/api/operators", requireRole("engineer"), async (_req, res, next) => {
     try {
       const result = await db.query(
-        `SELECT id, name FROM users WHERE role = 'operator' ORDER BY name`,
+        `SELECT id, name, (password_hash IS NOT NULL) AS activated
+         FROM users WHERE role = 'operator' ORDER BY name`,
       );
       res.json({ operators: result.rows });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/operators/:id/activate", requireRole("engineer"), async (req, res, next) => {
+    try {
+      const id = requireUuid(req.params.id);
+      const temporaryPassword = randomBytes(12).toString("base64url");
+      const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+      const activated = await db.query(
+        `UPDATE users SET password_hash = $1, must_change_password = true
+         WHERE id = $2 AND role = 'operator' AND password_hash IS NULL
+         RETURNING id, name, email`,
+        [passwordHash, id],
+      );
+      if (!activated.rowCount) {
+        throw httpError(409, "Ce compte opérateur est déjà activé ou introuvable.");
+      }
+      res.status(201).json({
+        operator: activated.rows[0],
+        temporaryPassword,
+      });
     } catch (error) {
       next(error);
     }
@@ -264,11 +341,12 @@ export function createApp(db, options = {}) {
       const request = validateRequest(req.body);
       if (request.assignedOperatorId) {
         const operator = await db.query(
-          `SELECT id FROM users WHERE id = $1 AND role = 'operator'`,
+          `SELECT id FROM users
+           WHERE id = $1 AND role = 'operator' AND password_hash IS NOT NULL`,
           [request.assignedOperatorId],
         );
         if (!operator.rowCount) {
-          throw httpError(400, "L’opérateur sélectionné n’existe pas ou n’a pas le rôle opérateur.");
+          throw httpError(400, "L’opérateur sélectionné n’existe pas ou son compte n’est pas activé.");
         }
       }
       const result = await db.query(

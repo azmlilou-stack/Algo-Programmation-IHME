@@ -2,10 +2,24 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL CHECK (char_length(name) BETWEEN 2 AND 100),
   email TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
+  password_hash TEXT,
   role TEXT NOT NULL CHECK (role IN ('engineer', 'operator')),
+  must_change_password BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
+
+INSERT INTO users (name, email, password_hash, role)
+VALUES
+  ('Thibaut', 'test+thibaut@decathlon.com', NULL, 'operator'),
+  ('Nathan', 'test+nathan@decathlon.com', NULL, 'operator'),
+  ('Estelle', 'test+estelle@decathlon.com', NULL, 'operator'),
+  ('Louise', 'test+louise@decathlon.com', NULL, 'operator'),
+  ('Nicolas', 'test+nicolas@decathlon.com', NULL, 'operator')
+ON CONFLICT (email) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,

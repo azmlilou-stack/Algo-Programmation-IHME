@@ -136,7 +136,19 @@ L’application est alors disponible sur [http://localhost:3000](http://localhos
 ### Comptes
 
 - L’inscription depuis l’interface crée un compte **ingénieur produit**.
-- Les comptes opérateurs ne peuvent pas être créés par inscription publique. Pour en créer un, ajoutez temporairement `OPERATOR_NAME`, `OPERATOR_EMAIL` et `OPERATOR_PASSWORD` à votre environnement local, puis lancez `npm run users:create-operator`. Le mot de passe doit comporter au moins 12 caractères. Retirez les variables une fois la commande terminée.
+- La migration ajoute les comptes opérateurs préconfigurés suivants, sans mot de passe :
+
+  | Opérateur | Adresse de connexion |
+  |---|---|
+  | Thibaut | `test+thibaut@decathlon.com` |
+  | Nathan | `test+nathan@decathlon.com` |
+  | Estelle | `test+estelle@decathlon.com` |
+  | Louise | `test+louise@decathlon.com` |
+  | Nicolas | `test+nicolas@decathlon.com` |
+
+- Dans **Équipe opératrice**, un ingénieur peut activer un compte. Le mot de passe temporaire est affiché une seule fois : transmettez-le à l’opérateur par un canal privé. À sa première connexion, l’opérateur doit le remplacer par un mot de passe d’au moins 12 caractères avant d’accéder aux demandes.
+- Vérifiez que les alias `test+nom@decathlon.com` sont bien distribués à la boîte de réception prévue. Aucun courriel d’activation n’est envoyé automatiquement.
+- Les comptes opérateurs ne peuvent pas être créés par inscription publique. Pour créer un compte opérateur supplémentaire en local, ajoutez temporairement `OPERATOR_NAME`, `OPERATOR_EMAIL` et `OPERATOR_PASSWORD` à votre environnement, puis lancez `npm run users:create-operator`. Le mot de passe doit comporter au moins 12 caractères. Retirez les variables une fois la commande terminée.
 - Les mots de passe sont stockés sous forme de hash bcrypt ; les sessions sont conservées en base et le cookie de session est `HttpOnly`.
 
 ### Vérifications

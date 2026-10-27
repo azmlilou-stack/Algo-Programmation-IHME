@@ -61,11 +61,14 @@ function App() {
   const [theme, setTheme] = useState(getInitialTheme);
   const [user, setUser] = useState(null);
   const [requests, setRequests] = useState([]);
+  const [operators, setOperators] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState("all");
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [activatingOperatorId, setActivatingOperatorId] = useState("");
+  const [temporaryCredentials, setTemporaryCredentials] = useState(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -82,12 +85,21 @@ function App() {
   }
 
   const refresh = useCallback(async () => {
-    const [session, requestList] = await Promise.all([
-      api("/auth/me"),
-      api("/requests"),
-    ]);
+    const session = await api("/auth/me");
     setUser(session.user);
+    if (session.user.must_change_password) {
+      setRequests([]);
+      setOperators([]);
+      return;
+    }
+    const requestList = await api("/requests");
     setRequests(requestList.requests);
+    if (session.user.role === "engineer") {
+      const operatorList = await api("/operators");
+      setOperators(operatorList.operators);
+    } else {
+      setOperators([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -125,6 +137,26 @@ function App() {
     }
   }
 
+  async function activateOperator(operator) {
+    setError("");
+    setActivatingOperatorId(operator.id);
+    try {
+      const result = await api(`/operators/${operator.id}/activate`, {
+        method: "POST",
+      });
+      setTemporaryCredentials({
+        name: result.operator.name,
+        email: result.operator.email,
+        password: result.temporaryPassword,
+      });
+      await refresh();
+    } catch (caught) {
+      setError(caught.message);
+    } finally {
+      setActivatingOperatorId("");
+    }
+  }
+
   if (loading) {
     return <main className="loading-screen">Chargement de votre espace…</main>;
   }
@@ -138,6 +170,16 @@ function App() {
           setUser(authenticatedUser);
           refresh().catch((caught) => setError(caught.message));
         }}
+      />
+    );
+  }
+  if (user.must_change_password) {
+    return (
+      <PasswordChangeScreen
+        user={user}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onChanged={() => refresh().catch((caught) => setError(caught.message))}
       />
     );
   }
@@ -185,6 +227,7 @@ function App() {
               setError("");
               try {
                 await api("/auth/logout", { method: "POST" });
+                setTemporaryCredentials(null);
                 setUser(null);
               } catch (caught) {
                 setError(caught.message);
@@ -230,6 +273,16 @@ function App() {
           <SummaryCard key={metric.label} {...metric} index={index} />
         ))}
       </section>
+
+      {!isOperator && (
+        <OperatorManagement
+          operators={operators}
+          activatingOperatorId={activatingOperatorId}
+          temporaryCredentials={temporaryCredentials}
+          onActivate={activateOperator}
+          onDismissCredentials={() => setTemporaryCredentials(null)}
+        />
+      )}
 
       <section className="list-section">
         <div className="section-heading">
@@ -312,6 +365,7 @@ function App() {
 
       {showForm && (
         <RequestModal
+          operators={operators}
           onClose={() => setShowForm(false)}
           onSubmit={async (body) => {
             await api("/requests", { method: "POST", body: JSON.stringify(body) });
@@ -356,6 +410,182 @@ function ThemeToggle({ theme, onToggle }) {
       </span>
       <span className="theme-toggle-label">{isDark ? "Mode jour" : "Mode nuit"}</span>
     </button>
+  );
+}
+
+function OperatorManagement({
+  operators,
+  activatingOperatorId,
+  temporaryCredentials,
+  onActivate,
+  onDismissCredentials,
+}) {
+  const [copyStatus, setCopyStatus] = useState("");
+
+  async function copyCredentials() {
+    try {
+      await navigator.clipboard.writeText(temporaryCredentials.password);
+      setCopyStatus("Mot de passe copié.");
+    } catch {
+      setCopyStatus("Copie indisponible : sélectionnez le mot de passe ci-dessus.");
+    }
+  }
+
+  return (
+    <section className="operator-management" aria-labelledby="operators-title">
+      <div className="operator-management-heading">
+        <div>
+          <p className="eyebrow">ACCÈS AU LABORATOIRE</p>
+          <h2 id="operators-title">Équipe opératrice</h2>
+          <p className="section-description">
+            Activez les comptes avant d’assigner les essais aux opérateurs.
+          </p>
+        </div>
+        <span className="operator-count">
+          {operators.filter((operator) => operator.activated).length}/{operators.length} actifs
+        </span>
+      </div>
+
+      {temporaryCredentials && (
+        <div className="credential-notice" role="status">
+          <div>
+            <strong>Compte activé : {temporaryCredentials.name}</strong>
+            <p>
+              Transmets ces identifiants à l’opérateur par un canal privé. Le mot
+              de passe temporaire ne sera plus affiché après fermeture de cette
+              page, et devra être changé à la première connexion.
+            </p>
+            <span className="credential-email">{temporaryCredentials.email}</span>
+            <code className="temporary-password">{temporaryCredentials.password}</code>
+            {copyStatus && <span className="copy-status">{copyStatus}</span>}
+          </div>
+          <div className="credential-actions">
+            <button className="button button-secondary" onClick={copyCredentials}>
+              Copier le mot de passe
+            </button>
+            <button className="button button-quiet" onClick={onDismissCredentials}>
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
+
+      <ul className="operator-list">
+        {operators.map((operator) => (
+          <li className="operator-row" key={operator.id}>
+            <span className="operator-avatar" aria-hidden="true">
+              {operator.name.slice(0, 1)}
+            </span>
+            <span className="operator-name">{operator.name}</span>
+            <span className={`operator-state${operator.activated ? " is-active" : ""}`}>
+              <span className="status-dot" />
+              {operator.activated ? "Compte actif" : "À activer"}
+            </span>
+            {!operator.activated && (
+              <button
+                className="button button-secondary"
+                disabled={Boolean(activatingOperatorId)}
+                onClick={() => onActivate(operator)}
+              >
+                {activatingOperatorId === operator.id ? "Activation…" : "Activer"}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function PasswordChangeScreen({ user, theme, onToggleTheme, onChanged }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+    if (newPassword !== confirmPassword) {
+      setError("Les deux nouveaux mots de passe ne correspondent pas.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await api("/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      onChanged();
+    } catch (caught) {
+      setError(caught.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <main className="password-page">
+      <header className="topbar password-topbar">
+        <a className="brand" href={import.meta.env.BASE_URL} aria-label="Accueil">
+          <span className="brand-mark">L</span>
+          <span><strong>LABORATOIRE</strong><small>Suivi des tests produit</small></span>
+        </a>
+        <div className="account">
+          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+          <span className="account-copy"><strong>{user.name}</strong><small>Compte opérateur</small></span>
+        </div>
+      </header>
+      <section className="password-card">
+        <p className="eyebrow">PREMIÈRE CONNEXION</p>
+        <h1>Choisis ton mot de passe.</h1>
+        <p className="password-description">
+          Pour sécuriser ton compte, remplace le mot de passe temporaire avant
+          d’accéder aux demandes de test.
+        </p>
+        {error && <div className="alert alert-error">{error}</div>}
+        <form className="auth-form" onSubmit={submit}>
+          <label>
+            Mot de passe temporaire
+            <input
+              type="password"
+              autoComplete="current-password"
+              required
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+          </label>
+          <label>
+            Nouveau mot de passe
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength="12"
+              required
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+          </label>
+          <label>
+            Confirmer le nouveau mot de passe
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength="12"
+              required
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+            />
+          </label>
+          <small className="field-hint">12 caractères minimum.</small>
+          <button className="button button-primary auth-submit" disabled={saving}>
+            {saving ? "Mise à jour…" : "Enregistrer et continuer"}
+          </button>
+        </form>
+      </section>
+    </main>
   );
 }
 
@@ -500,7 +730,7 @@ function RequestCard({ item, user, onAction }) {
   );
 }
 
-function RequestModal({ onClose, onSubmit }) {
+function RequestModal({ operators, onClose, onSubmit }) {
   const [form, setForm] = useState({
     productReference: "",
     quantity: "1",
@@ -511,16 +741,7 @@ function RequestModal({ onClose, onSubmit }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [operators, setOperators] = useState([]);
-  const [operatorsLoading, setOperatorsLoading] = useState(true);
-  const [operatorsError, setOperatorsError] = useState("");
-
-  useEffect(() => {
-    api("/operators")
-      .then((payload) => setOperators(payload.operators))
-      .catch((caught) => setOperatorsError(caught.message))
-      .finally(() => setOperatorsLoading(false));
-  }, []);
+  const activeOperators = operators.filter((operator) => operator.activated);
 
   async function submit(event) {
     event.preventDefault();
@@ -613,30 +834,22 @@ function RequestModal({ onClose, onSubmit }) {
             Opérateur assigné <span className="optional-label">Optionnel</span>
             <select
               value={form.assignedOperatorId}
-              disabled={operatorsLoading || Boolean(operatorsError)}
+              disabled={activeOperators.length === 0}
               onChange={(event) =>
                 setForm({ ...form, assignedOperatorId: event.target.value })
               }
             >
               <option value="">Laisser la demande ouverte à l’équipe</option>
-              {operators.map((operator) => (
+              {activeOperators.map((operator) => (
                 <option key={operator.id} value={operator.id}>
                   {operator.name}
                 </option>
               ))}
             </select>
-            {operatorsLoading && (
-              <small className="field-hint">Chargement des opérateurs…</small>
-            )}
-            {operatorsError && (
-              <small className="field-hint field-hint-error" role="status">
-                Impossible de charger les opérateurs : {operatorsError} Vous pouvez
-                créer une demande non assignée.
-              </small>
-            )}
-            {!operatorsLoading && !operatorsError && operators.length === 0 && (
+            {activeOperators.length === 0 && (
               <small className="field-hint">
-                Aucun compte opérateur n’a encore été créé.
+                Active d’abord un compte dans la section « Équipe opératrice » pour
+                pouvoir assigner une demande.
               </small>
             )}
           </label>

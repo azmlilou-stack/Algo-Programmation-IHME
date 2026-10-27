@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import bcrypt from "bcryptjs";
 import { describe, it } from "node:test";
 import request from "supertest";
 import { createApp, validateRegistration, validateRequest, validateResult } from "../server/app.js";
@@ -102,6 +103,7 @@ describe("API", () => {
             name: "Opérateur Test",
             email: "operator@example.com",
             role: "operator",
+            must_change_password: false,
           }],
         };
       }
@@ -162,16 +164,18 @@ describe("API", () => {
       name: "Opérateur Test",
     };
     const createdRequests = [];
+    let operatorActive = true;
     const engineerDb = {
       async query(sql, values = []) {
         if (sql.includes("FROM sessions s JOIN users u")) {
           return { rows: [engineer] };
         }
-        if (sql.includes("SELECT id, name FROM users WHERE role = 'operator'")) {
-          return { rows: [operator] };
+        if (sql.includes("SELECT id, name, (password_hash IS NOT NULL)")) {
+          return { rows: [{ ...operator, activated: true }] };
         }
-        if (sql.includes("SELECT id FROM users WHERE id = $1 AND role = 'operator'")) {
-          const rows = values[0] === operator.id ? [{ id: operator.id }] : [];
+        if (sql.includes("AND password_hash IS NOT NULL")) {
+          const rows =
+            operatorActive && values[0] === operator.id ? [{ id: operator.id }] : [];
           return { rows, rowCount: rows.length };
         }
         if (sql.includes("INSERT INTO test_requests")) {
@@ -198,7 +202,7 @@ describe("API", () => {
       .get("/api/operators")
       .set("Cookie", cookie)
       .expect(200);
-    assert.deepEqual(operatorList.body.operators, [operator]);
+    assert.deepEqual(operatorList.body.operators, [{ ...operator, activated: true }]);
 
     const requestBody = {
       productReference: "PRD-15",
@@ -229,6 +233,121 @@ describe("API", () => {
       .set("Cookie", cookie)
       .send({ ...requestBody, assignedOperatorId: "ea8fc84b-ecc8-4ea6-9c88-ef62c0e72013" })
       .expect(400);
+
+    operatorActive = false;
+    await request(engineerApp)
+      .post("/api/requests")
+      .set("Cookie", cookie)
+      .send(requestBody)
+      .expect(400);
+  });
+
+  it("permet à un ingénieur d’activer un compte opérateur avec un mot de passe temporaire", async () => {
+    const engineer = {
+      id: "ea8fc84b-ecc8-4ea6-9c88-ef62c0e72012",
+      name: "Alex Martin",
+      email: "alex@example.com",
+      role: "engineer",
+      must_change_password: false,
+    };
+    const operator = {
+      id: "ea8fc84b-ecc8-4ea6-9c88-ef62c0e72011",
+      name: "Thibaut",
+      email: "test+thibaut@decathlon.com",
+    };
+    let operatorPasswordHash = null;
+    let mustChangePassword = false;
+    const activationDb = {
+      async query(sql, values = []) {
+        if (sql.includes("FROM sessions s JOIN users u")) {
+          return { rows: [{ ...engineer, must_change_password: false }] };
+        }
+        if (sql.includes("SELECT id, name, (password_hash IS NOT NULL)")) {
+          return {
+            rows: [{ ...operator, activated: operatorPasswordHash !== null }],
+          };
+        }
+        if (sql.includes("UPDATE users SET password_hash = $1, must_change_password = true")) {
+          if (values[1] !== operator.id || operatorPasswordHash !== null) {
+            return { rows: [], rowCount: 0 };
+          }
+          operatorPasswordHash = values[0];
+          mustChangePassword = true;
+          return { rows: [operator], rowCount: 1 };
+        }
+        throw new Error(`Requête non simulée dans ce test : ${sql}`);
+      },
+    };
+    const engineerApp = createApp(activationDb, {
+      secureCookie: false,
+      staticDirectory: "/tmp/ihme-test-static",
+    });
+
+    const activation = await request(engineerApp)
+      .post(`/api/operators/${operator.id}/activate`)
+      .set("Cookie", "ihme_session=engineer-session")
+      .expect(201);
+    assert.equal(activation.body.operator.name, "Thibaut");
+    assert.equal(activation.body.temporaryPassword.length, 16);
+    assert.equal(mustChangePassword, true);
+    assert.equal(
+      await bcrypt.compare(activation.body.temporaryPassword, operatorPasswordHash),
+      true,
+    );
+
+    await request(engineerApp)
+      .post(`/api/operators/${operator.id}/activate`)
+      .set("Cookie", "ihme_session=engineer-session")
+      .expect(409);
+  });
+
+  it("force le changement du mot de passe temporaire avant l’accès aux demandes", async () => {
+    const operator = {
+      id: "ea8fc84b-ecc8-4ea6-9c88-ef62c0e72011",
+      name: "Thibaut",
+      email: "test+thibaut@decathlon.com",
+      role: "operator",
+      must_change_password: true,
+    };
+    const temporaryPassword = "mot-de-passe-temporaire";
+    let passwordHash = await bcrypt.hash(temporaryPassword, 4);
+    let mustChangePassword = true;
+    const passwordDb = {
+      async query(sql, values = []) {
+        if (sql.includes("FROM sessions s JOIN users u")) {
+          return {
+            rows: [{ ...operator, must_change_password: mustChangePassword }],
+          };
+        }
+        if (sql === "SELECT password_hash FROM users WHERE id = $1") {
+          return { rows: [{ password_hash: passwordHash }] };
+        }
+        if (sql.includes("UPDATE users SET password_hash = $1, must_change_password = false")) {
+          passwordHash = values[0];
+          mustChangePassword = false;
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes("FROM test_requests r")) return { rows: [], rowCount: 0 };
+        throw new Error(`Requête non simulée dans ce test : ${sql}`);
+      },
+    };
+    const operatorApp = createApp(passwordDb, {
+      secureCookie: false,
+      staticDirectory: "/tmp/ihme-test-static",
+    });
+    const cookie = "ihme_session=operator-session";
+
+    await request(operatorApp).get("/api/auth/me").set("Cookie", cookie).expect(200);
+    await request(operatorApp).get("/api/requests").set("Cookie", cookie).expect(403);
+    await request(operatorApp)
+      .post("/api/auth/change-password")
+      .set("Cookie", cookie)
+      .send({
+        currentPassword: temporaryPassword,
+        newPassword: "mot-de-passe-opérateur-final",
+      })
+      .expect(200);
+    await request(operatorApp).get("/api/requests").set("Cookie", cookie).expect(200);
   });
 
   it("empêche un autre opérateur de planifier une demande déjà assignée", async () => {
