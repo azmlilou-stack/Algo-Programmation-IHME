@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import labTestingIllustration from "./assets/lab-testing.svg";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`;
 const TEST_FAMILIES = ["Impact", "Thermique", "Mécanique"];
+const PRODUCT_CATEGORIES = ["Body protection", "maintien articulaire", "casque"];
 const STATUS_LABELS = {
   requested: "Demandée",
   scheduled: "Planifiée",
@@ -120,7 +122,12 @@ function App() {
         item.status === view;
       const matchesSearch =
         !query ||
-        [item.product_reference, item.test_family, item.requester_name]
+        [
+          item.product_reference,
+          item.test_family,
+          item.product_category,
+          item.requester_name,
+        ]
           .filter(Boolean)
           .some((value) => value.toLocaleLowerCase("fr").includes(query));
       return matchesView && matchesSearch;
@@ -238,6 +245,19 @@ function App() {
           </button>
         </div>
       </header>
+
+      <section className="lab-banner" aria-label="Laboratoire d’essais">
+        <div className="lab-banner-copy">
+          <p className="eyebrow">LABORATOIRE D’ESSAIS</p>
+          <h1>La performance se teste.</h1>
+          <p>Des essais rigoureux pour des produits prêts à vous accompagner.</p>
+        </div>
+        <img
+          className="lab-banner-image"
+          src={labTestingIllustration}
+          alt="Illustration d’un équipement de test dans un laboratoire"
+        />
+      </section>
 
       <section className="welcome">
         <div className="welcome-copy">
@@ -613,6 +633,7 @@ function RequestCard({ item, user, onAction }) {
           </span>
         </div>
         <p className="request-subtitle">
+          {item.product_category || "Catégorie non renseignée"} <span>·</span>{" "}
           {item.test_family} <span>·</span> {item.quantity} échantillon
           {item.quantity > 1 ? "s" : ""}
         </p>
@@ -735,6 +756,7 @@ function RequestModal({ operators, onClose, onSubmit }) {
     productReference: "",
     quantity: "1",
     testFamily: TEST_FAMILIES[0],
+    productCategory: "",
     dueDate: "",
     priority: "normal",
     assignedOperatorId: "",
@@ -797,15 +819,30 @@ function RequestModal({ operators, onClose, onSubmit }) {
               />
             </label>
             <label>
-              Famille de test
+              Catégorie du produit
               <select
-                value={form.testFamily}
-                onChange={(event) => setForm({ ...form, testFamily: event.target.value })}
+                required
+                value={form.productCategory}
+                onChange={(event) =>
+                  setForm({ ...form, productCategory: event.target.value })
+                }
               >
-                {TEST_FAMILIES.map((family) => <option key={family}>{family}</option>)}
+                <option value="">Choisir une catégorie</option>
+                {PRODUCT_CATEGORIES.map((category) => (
+                  <option key={category}>{category}</option>
+                ))}
               </select>
             </label>
           </div>
+          <label>
+            Famille de test
+            <select
+              value={form.testFamily}
+              onChange={(event) => setForm({ ...form, testFamily: event.target.value })}
+            >
+              {TEST_FAMILIES.map((family) => <option key={family}>{family}</option>)}
+            </select>
+          </label>
           <div className="form-grid">
             <label>
               Date limite

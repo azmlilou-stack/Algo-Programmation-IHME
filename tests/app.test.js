@@ -37,6 +37,7 @@ describe("validation des entrées", () => {
         productReference: "  PRD-14 ",
         quantity: 3,
         testFamily: "Thermique",
+        productCategory: "casque",
         dueDate: "2027-01-15",
         priority: "high",
       }),
@@ -44,6 +45,7 @@ describe("validation des entrées", () => {
         productReference: "PRD-14",
         quantity: 3,
         testFamily: "Thermique",
+        productCategory: "casque",
         dueDate: "2027-01-15",
         priority: "high",
         assignedOperatorId: null,
@@ -56,12 +58,15 @@ describe("validation des entrées", () => {
       productReference: "PRD-14",
       quantity: 1,
       testFamily: "Impact",
+      productCategory: "Body protection",
       dueDate: "2027-02-28",
       priority: "normal",
     };
     assert.throws(() => validateRequest({ ...validRequest, dueDate: "2027-02-30" }));
     assert.throws(() => validateRequest({ ...validRequest, quantity: 1.5 }));
     assert.throws(() => validateRequest({ ...validRequest, testFamily: "Chimique" }));
+    assert.throws(() => validateRequest({ ...validRequest, productCategory: "Autre" }));
+    assert.throws(() => validateRequest({ ...validRequest, productCategory: "" }));
     assert.throws(() => validateRequest(null));
   });
 
@@ -70,6 +75,7 @@ describe("validation des entrées", () => {
       productReference: "PRD-14",
       quantity: 1,
       testFamily: "Impact",
+      productCategory: "maintien articulaire",
       dueDate: "2027-02-28",
       priority: "normal",
     };
@@ -184,7 +190,8 @@ describe("API", () => {
             rows: [{
               id: `request-${createdRequests.length}`,
               requester_id: engineer.id,
-              assigned_operator_id: values[6],
+              product_category: values[4],
+              assigned_operator_id: values[7],
               status: "requested",
             }],
           };
@@ -208,6 +215,7 @@ describe("API", () => {
       productReference: "PRD-15",
       quantity: 2,
       testFamily: "Impact",
+      productCategory: "casque",
       dueDate: "2027-02-28",
       priority: "normal",
       assignedOperatorId: operator.id,
@@ -217,8 +225,10 @@ describe("API", () => {
       .set("Cookie", cookie)
       .send(requestBody)
       .expect(201);
+    assert.equal(assigned.body.request.product_category, "casque");
     assert.equal(assigned.body.request.assigned_operator_id, operator.id);
-    assert.equal(createdRequests[0][6], operator.id);
+    assert.equal(createdRequests[0][4], "casque");
+    assert.equal(createdRequests[0][7], operator.id);
 
     const unassigned = await request(engineerApp)
       .post("/api/requests")
@@ -226,7 +236,7 @@ describe("API", () => {
       .send({ ...requestBody, assignedOperatorId: "" })
       .expect(201);
     assert.equal(unassigned.body.request.assigned_operator_id, null);
-    assert.equal(createdRequests[1][6], null);
+    assert.equal(createdRequests[1][7], null);
 
     await request(engineerApp)
       .post("/api/requests")

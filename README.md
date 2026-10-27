@@ -49,7 +49,8 @@ Le verdict (Conforme ou Non conforme) est enregistré avec le résultat et reste
 |---|---|
 | Référence produit | Identifiant du produit à tester. |
 | Quantité | Nombre d'échantillons ou d'unités concernés. |
-| Famille de test | Catégorie du test demandé. |
+| Catégorie produit | Body protection, maintien articulaire ou casque. |
+| Famille de test | Type d'essai demandé, par exemple Impact, Thermique ou Mécanique. |
 | Date limite | Date à laquelle le test doit être réalisé au plus tard. |
 | Priorité | Niveau d'urgence de la demande. |
 | Opérateur assigné | Opérateur responsable, choisi à la création ; facultatif si la demande reste ouverte à l'équipe. |
@@ -71,6 +72,8 @@ Le MVP démarre avec les familles suivantes :
 - Impact
 - Thermique
 - Mécanique
+
+Les demandes sont également classées par catégorie produit : **Body protection**, **maintien articulaire** ou **casque**.
 
 La conception devra permettre de faire évoluer cette liste sans remettre en cause le parcours général d'une demande.
 

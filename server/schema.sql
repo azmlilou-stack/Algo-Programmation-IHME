@@ -36,6 +36,10 @@ CREATE TABLE IF NOT EXISTS test_requests (
   product_reference TEXT NOT NULL CHECK (char_length(product_reference) BETWEEN 1 AND 120),
   quantity INTEGER NOT NULL CHECK (quantity BETWEEN 1 AND 10000),
   test_family TEXT NOT NULL CHECK (test_family IN ('Impact', 'Thermique', 'Mécanique')),
+  product_category TEXT CHECK (
+    product_category IS NULL OR
+    product_category IN ('Body protection', 'maintien articulaire', 'casque')
+  ),
   due_date DATE NOT NULL,
   priority TEXT NOT NULL CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
   status TEXT NOT NULL DEFAULT 'requested'
@@ -45,6 +49,12 @@ CREATE TABLE IF NOT EXISTS test_requests (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE test_requests
+  ADD COLUMN IF NOT EXISTS product_category TEXT CHECK (
+    product_category IS NULL OR
+    product_category IN ('Body protection', 'maintien articulaire', 'casque')
+  );
 
 CREATE INDEX IF NOT EXISTS test_requests_requester_idx
   ON test_requests (requester_id, created_at DESC);

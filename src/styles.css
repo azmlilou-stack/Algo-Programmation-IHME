@@ -37,6 +37,26 @@ button { cursor: pointer; }
 .button-secondary:hover { background: #e2eee6; }
 .button-quiet { color: #67736e; background: transparent; }
 .button-quiet:hover { background: #edf1ee; }
+.lab-banner {
+  position: relative;
+  display: flex;
+  min-height: 190px;
+  align-items: center;
+  overflow: hidden;
+  margin-top: 21px;
+  padding: 28px 34px;
+  border: 1px solid #2e5a47;
+  border-radius: 15px;
+  color: #f3f8f4;
+  background:
+    radial-gradient(ellipse at 86% 20%, #527a5d 0, #527a5d00 42%),
+    linear-gradient(112deg, #183c32, #285441);
+}
+.lab-banner-copy { position: relative; z-index: 1; width: min(52%, 470px); }
+.lab-banner .eyebrow { color: #b7d5bf; }
+.lab-banner h1 { margin: 0 0 9px; font-size: clamp(24px, 3.2vw, 34px); letter-spacing: -.045em; }
+.lab-banner-copy > p:last-child { max-width: 380px; margin: 0; color: #d3e2d7; font-size: 13px; line-height: 1.6; }
+.lab-banner-image { position: absolute; top: 0; right: 0; width: 57%; height: 100%; object-fit: contain; object-position: right center; }
 .welcome { padding: 42px 0 28px; display: flex; align-items: end; justify-content: space-between; gap: 24px; }
 .eyebrow { margin: 0 0 10px; color: #789087; font: 700 10px "Manrope", sans-serif; letter-spacing: .16em; }
 h1, h2, h3, p { margin-top: 0; }
@@ -374,6 +394,10 @@ html[data-theme="dark"] .password-description { color: #a3b0a6; }
   .account { gap: 7px; }
   .account .button { padding: 0 8px; font-size: 11px; }
   .welcome { align-items: start; flex-direction: column; padding: 31px 0 21px; }
+  .lab-banner { min-height: 210px; padding: 22px; }
+  .lab-banner-copy { width: 68%; }
+  .lab-banner-copy > p:last-child { font-size: 11px; }
+  .lab-banner-image { right: -14%; width: 68%; opacity: .8; }
   .summary-grid { gap: 8px; }
   .summary-card { align-items: start; flex-direction: column; gap: 9px; padding: 13px; }
   .summary-icon { width: 33px; height: 33px; font-size: 16px; }
@@ -461,6 +485,13 @@ html[data-theme="dark"] .welcome {
 html[data-theme="dark"] .welcome::after { border-color: #a4d3b114; box-shadow: 0 0 0 24px #a4d3b108, 0 0 0 48px #a4d3b105; }
 html[data-theme="dark"] .welcome-period,
 html[data-theme="dark"] .welcome-note-mark { color: #9bc9a9; }
+html[data-theme="dark"] .lab-banner {
+  border-color: #355641;
+  background:
+    radial-gradient(ellipse at 86% 20%, #385b43 0, #385b4300 42%),
+    linear-gradient(112deg, #132c23, #1d3d2c);
+}
+html[data-theme="dark"] .lab-banner-image { opacity: .9; }
 html[data-theme="dark"] .welcome-description,
 html[data-theme="dark"] .welcome-note,
 html[data-theme="dark"] .welcome-action > span { color: #adbbb1; }

@@ -9,6 +9,11 @@ import { fileURLToPath } from "node:url";
 const SESSION_COOKIE = "ihme_session";
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
 const TEST_FAMILIES = new Set(["Impact", "Thermique", "Mécanique"]);
+const PRODUCT_CATEGORIES = new Set([
+  "Body protection",
+  "maintien articulaire",
+  "casque",
+]);
 const PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
 const VERDICTS = new Set(["conforming", "non_conforming"]);
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -17,7 +22,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 const publicUserFields = "id, name, email, role, must_change_password";
 const requestSelect = `
   SELECT r.id, r.requester_id, r.product_reference, r.quantity, r.test_family,
-    r.due_date, r.priority, r.status, r.assigned_operator_id, r.scheduled_date,
+    r.product_category, r.due_date, r.priority, r.status, r.assigned_operator_id, r.scheduled_date,
     r.created_at, requester.name AS requester_name, operator.name AS assigned_operator_name,
     result.verdict AS result_verdict, result.comment AS result_comment,
     result.submitted_at, result.validated_at
@@ -86,6 +91,9 @@ export function validateRequest(input = {}) {
   if (!TEST_FAMILIES.has(body.testFamily)) {
     throw httpError(400, "La famille de test n’est pas reconnue.");
   }
+  if (!PRODUCT_CATEGORIES.has(body.productCategory)) {
+    throw httpError(400, "La catégorie du produit n’est pas reconnue.");
+  }
   if (!dateIsValid) {
     throw httpError(400, "La date limite doit être une date valide au format AAAA-MM-JJ.");
   }
@@ -103,6 +111,7 @@ export function validateRequest(input = {}) {
     productReference,
     quantity,
     testFamily: body.testFamily,
+    productCategory: body.productCategory,
     dueDate,
     priority: body.priority,
     assignedOperatorId,
@@ -351,16 +360,17 @@ export function createApp(db, options = {}) {
       }
       const result = await db.query(
         `INSERT INTO test_requests
-          (requester_id, product_reference, quantity, test_family, due_date, priority,
-           assigned_operator_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+          (requester_id, product_reference, quantity, test_family, product_category,
+           due_date, priority, assigned_operator_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING id, requester_id, product_reference, quantity, test_family,
-           due_date, priority, status, assigned_operator_id, created_at`,
+           product_category, due_date, priority, status, assigned_operator_id, created_at`,
         [
           req.user.id,
           request.productReference,
           request.quantity,
           request.testFamily,
+          request.productCategory,
           request.dueDate,
           request.priority,
           request.assignedOperatorId,
