@@ -160,10 +160,10 @@ Dans les paramètres **Settings → Secrets and variables → Actions** de ce d�
 | Type | Nom | Valeur |
 |---|---|---|
 | Secret | `IHME_DEPLOY_TOKEN` | Jeton de déploiement du fichier d’accès personnel |
-| Variable | `IHME_DEPLOY_URL` | URL complète de déploiement du fichier d’accès personnel |
+| Variable | `IHME_DEPLOY_URL` | URL privée de déploiement du fichier d’accès personnel (chemin `/__deploy/pNN`) |
 | Variable | `IHME_BASE_PATH` | `/algo-programmation-ihme/` |
 
-Ne copiez jamais le jeton dans le dépôt, dans `.env`, dans une issue ou dans une capture publique. Un push sur `main` exécute les vérifications et publie l’image `ghcr.io/azmlilou-stack/algo-programmation-ihme` dans GHCR sans changer la version en ligne. Pour déployer, ouvrez **Actions → Construire et publier l’image → Run workflow**, sélectionnez `main`, cochez **Déployer cette version après construction** et lancez le workflow.
+La variable `IHME_DEPLOY_URL` est différente de l’adresse publique de l’application : son chemin se termine par `/__deploy/pNN`, selon la valeur remise dans votre fichier d’accès. Ne copiez jamais le jeton dans le dépôt, dans `.env`, dans une issue ou dans une capture publique. Un push sur `main` exécute les vérifications et publie l’image `ghcr.io/azmlilou-stack/algo-programmation-ihme` dans GHCR sans changer la version en ligne. Pour déployer, ouvrez **Actions → Construire et publier l’image → Run workflow**, sélectionnez `main`, cochez **Déployer cette version après construction** et lancez le workflow.
 
 Le jeton et l’URL complète de déploiement ne sont pas nécessaires au développement local et ne sont pas inclus dans le dépôt.
 

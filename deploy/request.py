@@ -57,9 +57,34 @@ if __name__ == "__main__":
             os.environ.get("REGISTRY_TOKEN", ""),
         )
         print("Déploiement vérifié : " + result["project"] + " @ " + result["digest"])
-    except (ValueError, OSError, urllib.error.URLError):
+    except ValueError as error:
         print(
-            "Déploiement refusé ou indisponible. Vérifier les paramètres privés et le résumé du workflow.",
+            "Paramètres ou réponse de déploiement invalides : " + str(error),
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    except urllib.error.HTTPError as error:
+        print(
+            "Le serveur de déploiement a répondu avec le code HTTP "
+            + str(error.code)
+            + ". Vérifier l’URL et le jeton dans les paramètres GitHub Actions.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    except urllib.error.URLError as error:
+        reason = error.reason
+        reason_type = type(reason).__name__
+        print(
+            "Impossible de joindre le serveur de déploiement ("
+            + reason_type
+            + "). Vérifier l’URL et la disponibilité du service.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    except OSError:
+        print(
+            "Erreur réseau ou délai dépassé pendant le déploiement. "
+            "Vérifier la disponibilité du service.",
             file=sys.stderr,
         )
         sys.exit(1)
