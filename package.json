@@ -1,24 +1,33 @@
 {
   "name": "algo-programmation-ihme",
   "version": "1.0.0",
-  "description": "Application web de suivi des demandes et des résultats de tests sur les produits.",
-  "main": "index.js",
+  "private": true,
+  "description": "Application de suivi des tests réalisés en laboratoire.",
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite --host 127.0.0.1",
+    "dev:api": "node --env-file-if-exists=.env server/index.js",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "db:migrate": "node --env-file-if-exists=.env server/migrate.js",
+    "users:create-operator": "node --env-file-if-exists=.env server/create-operator.js",
+    "test": "node --test"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/azmlilou-stack/Algo-Programmation-IHME.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/azmlilou-stack/Algo-Programmation-IHME/issues"
-  },
-  "homepage": "https://github.com/azmlilou-stack/Algo-Programmation-IHME#readme",
   "dependencies": {
-    "express": "^5.3.0"
+    "bcryptjs": "^3.0.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "pg": "^8.16.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.4",
+    "supertest": "^7.1.4",
+    "vite": "^7.1.12"
   }
 }

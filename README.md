@@ -1,57 +1,180 @@
-# Algo-Programmation-IHME
-# Suivi Test Produit 
+# Suivi des tests produit
 
-Application web de suivi des demandes et des résultats de tests sur les produits.
+Application web destinée à organiser les demandes de tests réalisées en laboratoire sur des produits et à centraliser leur suivi, leurs résultats et leur validation.
 
-## Contexte et objectif
+> **État du projet :** première version du MVP en cours de développement. Le déploiement sur le serveur du cours se lance manuellement depuis GitHub Actions.
 
-Aujourd'hui, les test du labo sont réalisés dans l'urgence, au dernier moment, et les équipes de test ont du 
-mal à s'intégrer au projet développement produit. Les résultats des tests sont mal exploités par les ingénieurs
-produits et retardent les délais de développement.
-Cette application centralise le processus entre les ingénieurs produits et l'équipe test.
+## Contexte
 
-## Utilisateurs
+Les demandes de tests sont souvent traitées dans l'urgence et les équipes de laboratoire sont difficiles à intégrer au cycle de développement produit. Le suivi dispersé des demandes et des résultats complique leur exploitation par les ingénieurs produits et peut retarder les décisions de développement.
 
-- **Ingénieurs produits** : créent des demandes de tests.
-- **Équipe test** : met à jour les demandes avec les résultats.
+L'application doit fournir un espace partagé entre les ingénieurs produits et les opérateurs de laboratoire, depuis la création d'une demande jusqu'à la validation de son résultat.
 
-## Informations d'une demande de test
+## Objectifs du MVP
 
-| Champ | Description |
+- Centraliser les demandes de tests sur les produits.
+- Rendre visibles leur planification et leur avancement.
+- Permettre aux opérateurs de consigner un verdict et un commentaire.
+- Faire valider et clôturer les résultats par l'ingénieur à l'origine de la demande.
+- Conserver les informations de demande et de résultat dans une base de données relationnelle.
+
+## Utilisateurs et responsabilités
+
+| Profil | Responsabilités |
 |---|---|
-| Référence produit | Identifiant du produit à tester |
-| Quantité à tester | Nombre d'échantillons / de tests |
-| Type de test | Type de test demandé |
-| Date limite | Date avant laquelle le test doit être réalisé |
-| Priorité | Degré d'urgence de la demande |
-| Testeur préconisé | Personne recommandée pour réaliser le test |
-| Résultat | Approved ou Fail (renseigné par l'équipe test) |
+| **Ingénieur produit (demandeur)** | Créer une demande, suivre son avancement, consulter le résultat, puis le valider et clôturer la demande. |
+| **Opérateur de laboratoire (testeur)** | Consulter les demandes, les planifier, réaliser les tests et saisir le verdict ainsi qu'un commentaire. |
 
-### Ingénieurs produits
-- Créer une demande de test (produit concerné, type de test, quantité, date limite)
-- Suivre l'avancement de leurs demandes
+L'application comporte une authentification avec des rôles distincts. Les autorisations doivent être vérifiées côté serveur, et pas uniquement masquées dans l'interface.
 
-### Équipe test
-- Consulter les demandes en attente
-- Saisir le résultat de chaque test : **Approved** ou **Fail**
-- Rajouter des commentaires, photos, autre...
+## Parcours d'une demande
 
-## Statuts d'une demande
+1. L'ingénieur produit crée une demande avec les informations nécessaires au laboratoire.
+2. L'opérateur planifie le test et fait avancer la demande.
+3. Après la réalisation du test, l'opérateur saisit un verdict **Conforme** ou **Non conforme** et un commentaire.
+4. La demande passe en attente de validation.
+5. L'ingénieur demandeur valide le résultat et clôture la demande.
 
-`Demandée` → `En cours` → `Terminée (Approved / Fail)`
+### Statuts
 
-## Technologies
+`Demandée` → `Planifiée` → `En cours` → `À valider` → `Terminée`
 
-- **Backend** : Node.js
-- **Framework** : Express
+Le verdict (Conforme ou Non conforme) est enregistré avec le résultat et reste consultable après la clôture.
+
+## Informations suivies
+
+### Demande de test
+
+| Information | Description |
+|---|---|
+| Référence produit | Identifiant du produit à tester. |
+| Quantité | Nombre d'échantillons ou d'unités concernés. |
+| Famille de test | Catégorie du test demandé. |
+| Date limite | Date à laquelle le test doit être réalisé au plus tard. |
+| Priorité | Niveau d'urgence de la demande. |
+| Testeur préconisé | Opérateur suggéré par le demandeur, le cas échéant. |
+| Planification | Date planifiée et opérateur en charge du test. |
+| Demandeur et dates de suivi | Informations de création et de mise à jour conservées par l'application. |
+
+### Résultat
+
+- Verdict : **Conforme** ou **Non conforme**.
+- Commentaire de l'opérateur.
+- Informations de saisie et de validation nécessaires au suivi.
+
+Le MVP ne demande pas de formulaire de mesures numériques, de seuils de conformité ou de pièces jointes. Ces éléments pourront être étudiés ultérieurement.
+
+## Familles de tests
+
+Le MVP démarre avec les familles suivantes :
+
+- Impact
+- Thermique
+- Mécanique
+
+La conception devra permettre de faire évoluer cette liste sans remettre en cause le parcours général d'une demande.
+
+## Règles métier principales
+
+- Une demande est créée par un ingénieur produit authentifié.
+- Une demande identifie son produit, sa quantité, sa famille de test, sa priorité et sa date limite.
+- L'opérateur renseigne le verdict et son commentaire avant l'envoi en validation.
+- Seul l'ingénieur demandeur valide et clôture sa demande.
+- Une demande non clôturée conserve son statut d'avancement ; une demande clôturée conserve son verdict final.
+
+## Architecture et technologies
+
+| Composant | Technologie |
+|---|---|
+| Frontend | React |
+| Backend | Node.js |
+| Framework backend | Express |
+| Base de données | PostgreSQL |
+
+Le frontend communique avec l'API Express, qui porte la logique métier, l'authentification, les autorisations et l'accès à PostgreSQL.
 
 ## Installation et lancement
 
-[À compléter quand le projet sera démarré]
+### Prérequis
 
-## État du projet
+- Node.js 24 et npm.
+- Docker avec Docker Compose, pour lancer PostgreSQL localement.
 
-🚧 En cours de conception
+### Développement local
+
+```bash
+npm ci
+cp .env.example .env
+```
+
+Remplacez `POSTGRES_PASSWORD` et `DATABASE_URL` dans `.env` par des valeurs locales cohérentes. Ne publiez jamais ce fichier.
+
+```bash
+docker compose up -d db
+npm run db:migrate
+npm run dev:api
+```
+
+Dans un second terminal :
+
+```bash
+npm run dev
+```
+
+Ouvrez ensuite [http://localhost:5173](http://localhost:5173). L’API est disponible sur le port `3000` et le frontend Vite relaie les appels `/api`.
+
+Pour lancer l’application compilée avec sa base locale :
+
+```bash
+docker compose up --build
+```
+
+L’application est alors disponible sur [http://localhost:3000](http://localhost:3000). La migration SQL idempotente est exécutée au démarrage.
+
+### Comptes
+
+- L’inscription depuis l’interface crée un compte **ingénieur produit**.
+- Les comptes opérateurs ne peuvent pas être créés par inscription publique. Pour en créer un, ajoutez temporairement `OPERATOR_NAME`, `OPERATOR_EMAIL` et `OPERATOR_PASSWORD` à votre environnement local, puis lancez `npm run users:create-operator`. Le mot de passe doit comporter au moins 12 caractères. Retirez les variables une fois la commande terminée.
+- Les mots de passe sont stockés sous forme de hash bcrypt ; les sessions sont conservées en base et le cookie de session est `HttpOnly`.
+
+### Vérifications
+
+```bash
+npm test
+npm run build
+```
+
+La route `GET /api/health` vérifie la disponibilité de PostgreSQL et renvoie uniquement un état de santé.
+
+## Déploiement sur le serveur du cours
+
+Le dépôt contient le Dockerfile, le client de déploiement et les workflows GitHub Actions correspondant au contrat du cours :
+
+- Node.js et Express servent le frontend React compilé et l’API sur le port `3000`.
+- L’API est sous `/api`; la route `/api/health` est contrôlée par le serveur.
+- PostgreSQL est fourni par l’environnement via `DATABASE_URL`; le pool est limité à quatre connexions.
+- Vite compile les ressources avec `IHME_BASE_PATH`, nécessaire pour le chemin d’application `/algo-programmation-ihme/`.
+
+Dans les paramètres **Settings → Secrets and variables → Actions** de ce dépôt, configurez les valeurs personnelles reçues de l’enseignant :
+
+| Type | Nom | Valeur |
+|---|---|---|
+| Secret | `IHME_DEPLOY_TOKEN` | Jeton de déploiement du fichier d’accès personnel |
+| Variable | `IHME_DEPLOY_URL` | URL complète de déploiement du fichier d’accès personnel |
+| Variable | `IHME_BASE_PATH` | `/algo-programmation-ihme/` |
+
+Ne copiez jamais le jeton dans le dépôt, dans `.env`, dans une issue ou dans une capture publique. Un push sur `main` exécute les vérifications et publie l’image `ghcr.io/azmlilou-stack/algo-programmation-ihme` dans GHCR sans changer la version en ligne. Pour déployer, ouvrez **Actions → Construire et publier l’image → Run workflow**, sélectionnez `main`, cochez **Déployer cette version après construction** et lancez le workflow.
+
+Le jeton et l’URL complète de déploiement ne sont pas nécessaires au développement local et ne sont pas inclus dans le dépôt.
+
+## Périmètre ultérieur
+
+Les besoins suivants ne font pas partie du MVP défini ici et pourront être priorisés séparément :
+
+- Saisie de mesures détaillées et comparaison à des seuils.
+- Ajout de photos ou d'autres pièces jointes.
+- Gestion de protocoles de test détaillés.
+- Création et administration des familles de tests depuis l'application.
 
 ## Auteur
 
