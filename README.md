@@ -138,7 +138,7 @@ L’application est alors disponible sur [http://localhost:3000](http://localhos
 
 ### Comptes
 
-- L’inscription depuis l’interface crée un compte **ingénieur produit**.
+- À l’inscription, choisissez **ingénieur produit** ou **ingénieur essais**. Le compte est actif immédiatement ; l’ingénieur essais peut alors accéder au tableau du laboratoire.
 - À la connexion, choisissez **Ingénieur produit** ou **Ingénieur essais**. Le serveur vérifie que le profil choisi correspond au rôle réel du compte. Les comptes historiquement nommés « opérateur » restent les comptes d’ingénieur essais et conservent leurs identifiants.
 - L’espace ingénieur essais affiche un tableau filtrable par statut, les dates de création, de planification et d’échéance, ainsi que des alertes pour les tests non terminés en retard ou dus dans les 7 jours. Le filtre **Passées** regroupe les tests réalisés en attente de validation et ceux déjà validés ; **Validées** ne contient que les demandes clôturées.
 - La migration ajoute les comptes opérateurs préconfigurés suivants, sans mot de passe :
@@ -153,7 +153,7 @@ L’application est alors disponible sur [http://localhost:3000](http://localhos
 
 - Dans **Équipe opératrice**, un ingénieur peut activer un compte. Le mot de passe temporaire est affiché une seule fois : transmettez-le à l’opérateur par un canal privé. À sa première connexion, l’opérateur doit le remplacer par un mot de passe d’au moins 12 caractères avant d’accéder aux demandes.
 - Vérifiez que les alias `test+nom@decathlon.com` sont bien distribués à la boîte de réception prévue. Aucun courriel d’activation n’est envoyé automatiquement.
-- Les comptes opérateurs ne peuvent pas être créés par inscription publique. Pour créer un compte opérateur supplémentaire en local, ajoutez temporairement `OPERATOR_NAME`, `OPERATOR_EMAIL` et `OPERATOR_PASSWORD` à votre environnement, puis lancez `npm run users:create-operator`. Le mot de passe doit comporter au moins 12 caractères. Retirez les variables une fois la commande terminée.
+- Les comptes ingénieurs essais créés depuis le formulaire sont actifs immédiatement et apparaissent dans l’équipe opératrice. Les comptes prédéfinis ci-dessus restent inactifs jusqu’à leur activation par un ingénieur produit. Pour créer un compte opérateur supplémentaire en local sans passer par le formulaire, ajoutez temporairement `OPERATOR_NAME`, `OPERATOR_EMAIL` et `OPERATOR_PASSWORD` à votre environnement, puis lancez `npm run users:create-operator`. Le mot de passe doit comporter au moins 12 caractères. Retirez les variables une fois la commande terminée.
 - Les mots de passe sont stockés sous forme de hash bcrypt ; les sessions sont conservées en base et le cookie de session est `HttpOnly`.
 
 ### Vérifications

@@ -54,6 +54,7 @@ export function validateRegistration(input = {}) {
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
+  const role = body.role === undefined ? "engineer" : body.role;
 
   if (name.length < 2 || name.length > 100) {
     throw httpError(400, "Le nom doit contenir entre 2 et 100 caractères.");
@@ -64,7 +65,10 @@ export function validateRegistration(input = {}) {
   if (password.length < 12 || Buffer.byteLength(password, "utf8") > 72) {
     throw httpError(400, "Le mot de passe doit contenir entre 12 et 72 octets.");
   }
-  return { name, email, password };
+  if (!["engineer", "operator"].includes(role)) {
+    throw httpError(400, "Le profil du compte n’est pas reconnu.");
+  }
+  return { name, email, password, role };
 }
 
 export function validateRequest(input = {}) {
@@ -182,13 +186,13 @@ export function createApp(db, options = {}) {
 
   app.post("/api/auth/register", authRateLimit, async (req, res, next) => {
     try {
-      const { name, email, password } = validateRegistration(req.body);
+      const { name, email, password, role } = validateRegistration(req.body);
       const passwordHash = await bcrypt.hash(password, 12);
       const created = await db.query(
         `INSERT INTO users (name, email, password_hash, role)
-         VALUES ($1, $2, $3, 'engineer')
+         VALUES ($1, $2, $3, $4)
          RETURNING ${publicUserFields}`,
-        [name, email, passwordHash],
+        [name, email, passwordHash, role],
       );
       await createSession(db, created.rows[0].id, res, secureCookie, cookiePath);
       res.status(201).json({ user: created.rows[0] });

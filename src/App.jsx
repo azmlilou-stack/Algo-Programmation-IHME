@@ -1182,7 +1182,9 @@ function AuthScreen({ onAuthenticated, serverError, theme, onToggleTheme }) {
           name,
           email,
           password,
-          ...(mode === "login" ? { expectedRole: selectedRole } : {}),
+          ...(mode === "login"
+            ? { expectedRole: selectedRole }
+            : { role: selectedRole }),
         }),
       });
       onAuthenticated(payload.user);
@@ -1218,37 +1220,37 @@ function AuthScreen({ onAuthenticated, serverError, theme, onToggleTheme }) {
         </div>
         <div className="auth-form-wrap">
           <p className="eyebrow">ESPACE SÉCURISÉ</p>
-          <h2>{mode === "login" ? "Ravi de vous revoir." : "Créer un compte ingénieur."}</h2>
+          <h2>{mode === "login" ? "Ravi de vous revoir." : "Créer votre compte."}</h2>
           <p className="muted">
             {mode === "login"
               ? "Connectez-vous pour retrouver votre activité."
-              : "L’inscription est réservée aux ingénieurs produits."}
+              : `Votre compte ${selectedRole === "operator" ? "ingénieur essais" : "ingénieur produit"} sera actif dès sa création.`}
           </p>
-          {mode === "login" && (
-            <fieldset className="role-picker">
-              <legend>Vous vous connectez en tant que</legend>
-              <div className="role-options">
-                <button
-                  type="button"
-                  className={`role-option${selectedRole === "engineer" ? " is-selected" : ""}`}
-                  aria-pressed={selectedRole === "engineer"}
-                  onClick={() => setSelectedRole("engineer")}
-                >
-                  <span className="role-option-icon" aria-hidden="true">⌁</span>
-                  <span><strong>Ingénieur produit</strong><small>Créer et valider des demandes</small></span>
-                </button>
-                <button
-                  type="button"
-                  className={`role-option${selectedRole === "operator" ? " is-selected" : ""}`}
-                  aria-pressed={selectedRole === "operator"}
-                  onClick={() => setSelectedRole("operator")}
-                >
-                  <span className="role-option-icon" aria-hidden="true">⚗</span>
-                  <span><strong>Ingénieur essais</strong><small>Planifier et suivre les tests</small></span>
-                </button>
-              </div>
-            </fieldset>
-          )}
+          <fieldset className="role-picker">
+            <legend>
+              {mode === "login" ? "Vous vous connectez en tant que" : "Créer un compte en tant que"}
+            </legend>
+            <div className="role-options">
+              <button
+                type="button"
+                className={`role-option${selectedRole === "engineer" ? " is-selected" : ""}`}
+                aria-pressed={selectedRole === "engineer"}
+                onClick={() => setSelectedRole("engineer")}
+              >
+                <span className="role-option-icon" aria-hidden="true">⌁</span>
+                <span><strong>Ingénieur produit</strong><small>Créer et valider des demandes</small></span>
+              </button>
+              <button
+                type="button"
+                className={`role-option${selectedRole === "operator" ? " is-selected" : ""}`}
+                aria-pressed={selectedRole === "operator"}
+                onClick={() => setSelectedRole("operator")}
+              >
+                <span className="role-option-icon" aria-hidden="true">⚗</span>
+                <span><strong>Ingénieur essais</strong><small>Planifier et suivre les tests</small></span>
+              </button>
+            </div>
+          </fieldset>
           {(error || serverError) && (
             <div className="alert alert-error">{error || serverError}</div>
           )}
@@ -1284,7 +1286,6 @@ function AuthScreen({ onAuthenticated, serverError, theme, onToggleTheme }) {
             <button
               onClick={() => {
                 setMode(mode === "login" ? "register" : "login");
-                setSelectedRole("engineer");
                 setError("");
               }}
             >

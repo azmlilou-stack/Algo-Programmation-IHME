@@ -17,7 +17,28 @@ describe("validation des entrées", () => {
         name: "Alex Martin",
         email: "alex@example.com",
         password: "mot-de-passe-solide",
+        role: "operator",
       },
+    );
+  });
+
+  it("utilise le profil ingénieur produit par défaut et refuse les rôles inconnus", () => {
+    assert.equal(
+      validateRegistration({
+        name: "Alex Martin",
+        email: "alex@example.com",
+        password: "mot-de-passe-solide",
+      }).role,
+      "engineer",
+    );
+    assert.throws(
+      () => validateRegistration({
+        name: "Alex Martin",
+        email: "alex@example.com",
+        password: "mot-de-passe-solide",
+        role: "admin",
+      }),
+      /profil du compte n’est pas reconnu/,
     );
   });
 
@@ -413,24 +434,37 @@ describe("API", () => {
     assert.equal(sessionCreated, true);
   });
 
-  it("crée uniquement un compte ingénieur et gère une session jusqu’à la déconnexion", async () => {
+  it("crée un compte ingénieur essais choisi et gère sa session jusqu’à la déconnexion", async () => {
     const storedSessions = new Set();
-    const user = {
-      id: "ea8fc84b-ecc8-4ea6-9c88-ef62c0e72011",
-      name: "Alex Martin",
-      email: "alex@example.com",
-      role: "engineer",
-    };
     const authDb = {
       async query(sql, values = []) {
-        if (sql.includes("INSERT INTO users")) return { rows: [user], rowCount: 1 };
+        if (sql.includes("INSERT INTO users")) {
+          return {
+            rows: [{
+              id: "ea8fc84b-ecc8-4ea6-9c88-ef62c0e72011",
+              name: values[0],
+              email: values[1],
+              role: values[3],
+              must_change_password: false,
+            }],
+            rowCount: 1,
+          };
+        }
         if (sql.includes("INSERT INTO sessions")) {
           storedSessions.add(values[0]);
           return { rows: [], rowCount: 1 };
         }
         if (sql.includes("FROM sessions s JOIN users u")) {
           return {
-            rows: storedSessions.has(values[0]) ? [user] : [],
+            rows: storedSessions.has(values[0])
+              ? [{
+                  id: "ea8fc84b-ecc8-4ea6-9c88-ef62c0e72011",
+                  name: "Alex Martin",
+                  email: "alex@example.com",
+                  role: "operator",
+                  must_change_password: false,
+                }]
+              : [],
           };
         }
         if (sql.includes("DELETE FROM sessions")) {
@@ -453,7 +487,7 @@ describe("API", () => {
         role: "operator",
       })
       .expect(201);
-    assert.equal(registered.body.user.role, "engineer");
+    assert.equal(registered.body.user.role, "operator");
     await agent.get("/api/auth/me").expect(200);
     await agent.post("/api/auth/logout").expect(204);
     await agent.get("/api/auth/me").expect(401);
