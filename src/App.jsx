@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import labTestingIllustration from "./assets/lab-testing.svg";
-import helmetIllustration from "./assets/bike-helmet.svg";
+import helmetIllustration from "./assets/bike-helmet-realistic.png";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`;
 const TEST_FAMILIES = ["Impact", "Thermique", "Mécanique"];
