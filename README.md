@@ -141,6 +141,7 @@ L’application est alors disponible sur [http://localhost:3000](http://localhos
 - À l’inscription, choisissez **ingénieur produit** ou **ingénieur essais**. Le compte est actif immédiatement ; l’ingénieur essais peut alors accéder au tableau du laboratoire.
 - À la connexion, choisissez **Ingénieur produit** ou **Ingénieur essais**. Le serveur vérifie que le profil choisi correspond au rôle réel du compte. Les comptes historiquement nommés « opérateur » restent les comptes d’ingénieur essais et conservent leurs identifiants.
 - L’espace ingénieur essais affiche un tableau filtrable par statut, les dates de création, de planification et d’échéance, ainsi que des alertes pour les tests non terminés en retard ou dus dans les 7 jours. Le filtre **Passées** regroupe les tests réalisés en attente de validation et ceux déjà validés ; **Validées** ne contient que les demandes clôturées.
+- Le tableau peut aussi être filtré par catégorie produit, priorité et ingénieur essais assigné ; la vue **Calendrier** affiche les tests planifiés et leur échéance maximale. La gestion des comptes opérateurs est disponible dans l’onglet **Équipe**, séparé des demandes.
 - La migration ajoute les comptes opérateurs préconfigurés suivants, sans mot de passe :
 
   | Opérateur | Adresse de connexion |

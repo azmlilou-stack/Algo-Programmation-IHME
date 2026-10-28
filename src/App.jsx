@@ -1,5 +1,4 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import labTestingIllustration from "./assets/lab-testing.svg";
 import helmetIllustration from "./assets/bike-helmet-realistic.png";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`;
@@ -52,6 +51,17 @@ function formatDate(value) {
   return new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString("fr-FR");
 }
 
+function addMonths(date, amount) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function dateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function getInitialTheme() {
   try {
     const savedTheme = window.localStorage.getItem("ihme-theme");
@@ -97,6 +107,16 @@ function App() {
   const [view, setView] = useState("all");
   const [tableFilter, setTableFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [selectedTab, setSelectedTab] = useState("requests");
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
+  const [facets, setFacets] = useState({
+    category: "all",
+    priority: "all",
+    operator: "all",
+  });
   const [showForm, setShowForm] = useState(false);
   const [activatingOperatorId, setActivatingOperatorId] = useState("");
   const [temporaryCredentials, setTemporaryCredentials] = useState(null);
@@ -142,13 +162,18 @@ function App() {
       .finally(() => setLoading(false));
   }, [refresh]);
 
-  const visibleRequests = useMemo(() => {
+  const facetFilteredRequests = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("fr");
     return requests.filter((item) => {
-      const matchesView =
-        view === "all" ||
-        (view === "open" && item.status !== "done") ||
-        item.status === view;
+      const matchesCategory =
+        facets.category === "all" || item.product_category === facets.category;
+      const matchesPriority =
+        facets.priority === "all" || item.priority === facets.priority;
+      const matchesOperator =
+        facets.operator === "all" ||
+        (facets.operator === "unassigned"
+          ? !item.assigned_operator_id
+          : item.assigned_operator_id === facets.operator);
       const matchesSearch =
         !query ||
         [
@@ -156,12 +181,34 @@ function App() {
           item.test_family,
           item.product_category,
           item.requester_name,
+          item.assigned_operator_name,
         ]
           .filter(Boolean)
           .some((value) => value.toLocaleLowerCase("fr").includes(query));
-      return matchesView && matchesSearch;
+      return matchesCategory && matchesPriority && matchesOperator && matchesSearch;
     });
-  }, [requests, search, view]);
+  }, [facets, requests, search]);
+
+  const visibleRequests = useMemo(
+    () =>
+      facetFilteredRequests.filter((item) =>
+        view === "all" ||
+        (view === "open" && item.status !== "done") ||
+        item.status === view,
+      ),
+    [facetFilteredRequests, view],
+  );
+  const assignedOperators = useMemo(() => {
+    const byId = new Map(
+      operators.map((operator) => [operator.id, operator.name]),
+    );
+    requests.forEach((item) => {
+      if (item.assigned_operator_id && item.assigned_operator_name) {
+        byId.set(item.assigned_operator_id, item.assigned_operator_name);
+      }
+    });
+    return [...byId].map(([id, name]) => ({ id, name }));
+  }, [operators, requests]);
 
   async function perform(action) {
     setError("");
@@ -221,25 +268,6 @@ function App() {
   }
 
   const isOperator = user.role === "operator";
-  const statusCount = (status) =>
-    requests.filter((item) => item.status === status).length;
-  const inProgressCount = requests.filter((item) =>
-    ["scheduled", "in_progress"].includes(item.status),
-  ).length;
-  const metrics = isOperator
-    ? [
-        { label: "À planifier", value: statusCount("requested"), icon: "＋", tone: "sand" },
-        { label: "Essais en cours", value: inProgressCount, icon: "◷", tone: "blue" },
-        { label: "À transmettre", value: statusCount("pending_validation"), icon: "↗", tone: "gold" },
-        { label: "Terminées", value: statusCount("done"), icon: "✓", tone: "green" },
-      ]
-    : [
-        { label: "Toutes mes demandes", value: requests.length, icon: "▤", tone: "green" },
-        { label: "En traitement", value: inProgressCount, icon: "◷", tone: "blue" },
-        { label: "À valider", value: statusCount("pending_validation"), icon: "✓", tone: "gold" },
-        { label: "Terminées", value: statusCount("done"), icon: "✓", tone: "sand" },
-      ];
-
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -275,20 +303,7 @@ function App() {
         </div>
       </header>
 
-      <section className="lab-banner" aria-label="Laboratoire d’essais">
-        <div className="lab-banner-copy">
-          <p className="eyebrow">LABORATOIRE D’ESSAIS</p>
-          <h1>La performance se teste.</h1>
-          <p>Des essais rigoureux pour des produits prêts à vous accompagner.</p>
-        </div>
-        <img
-          className="lab-banner-image"
-          src={labTestingIllustration}
-          alt="Illustration d’un équipement de test dans un laboratoire"
-        />
-      </section>
-
-      <section className={`welcome${isOperator ? " welcome-trials" : ""}`}>
+      <section className={`welcome welcome-compact${isOperator ? " welcome-trials" : ""}`}>
         <div className="welcome-copy">
           <p className="eyebrow">ESPACE {isOperator ? "INGÉNIEUR ESSAIS" : "PRODUIT"}</p>
           <h1>
@@ -300,26 +315,67 @@ function App() {
               ? "Pilotez les essais, leurs échéances et les résultats du laboratoire."
               : "De la demande au résultat validé, gardez un œil sur chaque essai."}
           </p>
-          <div className="welcome-note">
-            <span className="welcome-note-mark">✳</span>
-            <span>Des essais mieux suivis, des décisions produit plus sereines.</span>
-          </div>
         </div>
         {!isOperator && (
-          <div className="welcome-action">
-            <span>Un nouveau besoin au laboratoire ?</span>
-            <button className="button button-primary" onClick={() => setShowForm(true)}>
-              <span aria-hidden="true">＋</span> Créer une demande
-            </button>
-          </div>
+          <button className="button button-primary new-request-button" onClick={() => setShowForm(true)}>
+            <span aria-hidden="true">＋</span> Nouvelle demande
+          </button>
         )}
       </section>
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      {isOperator ? (
+      <nav className="workspace-tabs" aria-label="Sections du laboratoire">
+        <button
+          className={`workspace-tab${selectedTab === "requests" ? " is-active" : ""}`}
+          aria-current={selectedTab === "requests" ? "page" : undefined}
+          onClick={() => setSelectedTab("requests")}
+        >
+          Demandes <span>{requests.length}</span>
+        </button>
+        <button
+          className={`workspace-tab${selectedTab === "calendar" ? " is-active" : ""}`}
+          aria-current={selectedTab === "calendar" ? "page" : undefined}
+          onClick={() => setSelectedTab("calendar")}
+        >
+          Calendrier
+        </button>
+        {!isOperator && (
+          <button
+            className={`workspace-tab${selectedTab === "team" ? " is-active" : ""}`}
+            aria-current={selectedTab === "team" ? "page" : undefined}
+            onClick={() => setSelectedTab("team")}
+          >
+            Équipe
+          </button>
+        )}
+      </nav>
+
+      {selectedTab === "team" && !isOperator ? (
+        <OperatorManagement
+          operators={operators}
+          activatingOperatorId={activatingOperatorId}
+          temporaryCredentials={temporaryCredentials}
+          onActivate={activateOperator}
+          onDismissCredentials={() => setTemporaryCredentials(null)}
+        />
+      ) : selectedTab === "calendar" ? (
+        <CalendarView
+          requests={facetFilteredRequests}
+          month={calendarMonth}
+          onMonthChange={setCalendarMonth}
+          search={search}
+          onSearch={setSearch}
+          operators={assignedOperators}
+          facets={facets}
+          onFacetsChange={setFacets}
+        />
+      ) : isOperator ? (
         <TrialDashboard
           requests={requests}
+          operators={assignedOperators}
+          facets={facets}
+          onFacetsChange={setFacets}
           search={search}
           onSearch={setSearch}
           filter={tableFilter}
@@ -328,100 +384,83 @@ function App() {
           onAction={perform}
         />
       ) : (
-        <>
-          <section className="summary-grid" aria-label="Résumé des demandes">
-            {metrics.map((metric, index) => (
-              <SummaryCard key={metric.label} {...metric} index={index} />
-            ))}
-          </section>
-
-          <OperatorManagement
-            operators={operators}
-            activatingOperatorId={activatingOperatorId}
-            temporaryCredentials={temporaryCredentials}
-            onActivate={activateOperator}
-            onDismissCredentials={() => setTemporaryCredentials(null)}
-          />
-
-          <section className="list-section">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">SUIVI DU LABORATOIRE</p>
-            <h2>{isOperator ? "Demandes du laboratoire" : "Mes demandes"}</h2>
-            <p className="section-description">
-              {isOperator
-                ? "Priorisez les essais et mettez à jour leur avancement."
-                : "Retrouvez le statut et les résultats de vos demandes."}
-            </p>
+        <section className="list-section request-workspace">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">SUIVI DU LABORATOIRE</p>
+              <h2>Mes demandes</h2>
+              <p className="section-description">
+                Retrouvez le statut, les échéances et les résultats de vos tests.
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="list-toolbar">
-          <div className="filter-tabs" role="group" aria-label="Filtrer les demandes">
-            {REQUEST_FILTERS.map((filter) => (
-              <button
-                key={filter.value}
-                className={`filter-tab${view === filter.value ? " filter-tab-active" : ""}`}
-                aria-pressed={view === filter.value}
-                onClick={() => setView(filter.value)}
-              >
-                {filter.value === "pending_validation" && isOperator
-                  ? "À transmettre"
-                  : filter.label}
-                <span>
-                  {filter.value === "all"
-                    ? requests.length
-                    : filter.value === "open"
-                      ? requests.filter((item) => item.status !== "done").length
-                      : statusCount(filter.value)}
-                </span>
-              </button>
-            ))}
-          </div>
-          <label className="search-control">
-            <span aria-hidden="true">⌕</span>
-            <span className="sr-only">Rechercher une demande</span>
-            <input
-              type="search"
-              placeholder="Référence, essai…"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </label>
-        </div>
-        {visibleRequests.length ? (
-          <div className="request-list">
-            {visibleRequests.map((item) => (
-              <RequestCard
-                key={item.id}
-                item={item}
-                user={user}
-                onAction={perform}
+          <div className="list-toolbar">
+            <div className="filter-tabs" role="group" aria-label="Filtrer les demandes">
+              {REQUEST_FILTERS.map((filter) => (
+                <button
+                  key={filter.value}
+                  className={`filter-tab${view === filter.value ? " filter-tab-active" : ""}`}
+                  aria-pressed={view === filter.value}
+                  onClick={() => setView(filter.value)}
+                >
+                  {filter.label}
+                  <span>
+                    {filter.value === "all"
+                      ? requests.length
+                      : filter.value === "open"
+                        ? requests.filter((item) => item.status !== "done").length
+                        : requests.filter((item) => item.status === filter.value).length}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <label className="search-control">
+              <span aria-hidden="true">⌕</span>
+              <span className="sr-only">Rechercher une demande</span>
+              <input
+                type="search"
+                placeholder="Référence, essai…"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
               />
-            ))}
+            </label>
           </div>
-        ) : (
-          <div className="empty-state">
-            <span className="empty-icon">{search ? "⌕" : "✳"}</span>
-            <h3>
-              {search
-                ? "Aucune demande ne correspond"
-                : requests.length
-                  ? "Rien dans cette sélection"
-                  : "Aucune demande pour le moment"}
-            </h3>
-            <p>
-              {search
-                ? "Essayez une autre référence ou un autre terme de recherche."
-                : requests.length
-                  ? "Choisissez un autre filtre pour consulter les demandes."
-                  : isOperator
-                    ? "Les demandes disponibles apparaîtront ici."
+          <FacetFilters
+            operators={assignedOperators}
+            facets={facets}
+            onChange={setFacets}
+          />
+          {visibleRequests.length ? (
+            <div className="request-list">
+              {visibleRequests.map((item) => (
+                <RequestCard
+                  key={item.id}
+                  item={item}
+                  user={user}
+                  onAction={perform}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <span className="empty-icon">{search ? "⌕" : "✳"}</span>
+              <h3>
+                {search
+                  ? "Aucune demande ne correspond"
+                  : requests.length
+                    ? "Rien dans cette sélection"
+                    : "Aucune demande pour le moment"}
+              </h3>
+              <p>
+                {search
+                  ? "Essayez une autre référence ou un autre terme de recherche."
+                  : requests.length
+                    ? "Choisissez un autre filtre pour consulter les demandes."
                     : "Créez une demande pour lancer un essai au laboratoire."}
-            </p>
-          </div>
-        )}
-          </section>
-        </>
+              </p>
+            </div>
+          )}
+        </section>
       )}
 
       {showForm && (
@@ -440,30 +479,220 @@ function App() {
   );
 }
 
-function SummaryCard({ label, value, icon, tone, index }) {
+function FacetFilters({ operators, facets, onChange }) {
+  function update(field, value) {
+    onChange((current) => ({ ...current, [field]: value }));
+  }
+
   return (
-    <article
-      className={`summary-card summary-card-${tone}`}
-      style={{ "--card-order": index }}
-    >
-      <span className="summary-icon" aria-hidden="true">{icon}</span>
-      <div>
-        <p>{label}</p>
-        <strong>{value}</strong>
-      </div>
-    </article>
+    <div className="facet-filters" aria-label="Filtres détaillés">
+      <label>
+        Catégorie
+        <select
+          value={facets.category}
+          onChange={(event) => update("category", event.target.value)}
+        >
+          <option value="all">Toutes les catégories</option>
+          {PRODUCT_CATEGORIES.map((category) => <option key={category}>{category}</option>)}
+        </select>
+      </label>
+      <label>
+        Priorité
+        <select
+          value={facets.priority}
+          onChange={(event) => update("priority", event.target.value)}
+        >
+          <option value="all">Toutes les priorités</option>
+          {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Ingénieur essais
+        <select
+          value={facets.operator}
+          onChange={(event) => update("operator", event.target.value)}
+        >
+          <option value="all">Tous les responsables</option>
+          <option value="unassigned">Non assignées</option>
+          {operators.map((operator) => (
+            <option key={operator.id} value={operator.id}>{operator.name}</option>
+          ))}
+        </select>
+      </label>
+    </div>
   );
 }
 
-function TrialDashboard({ requests, search, onSearch, filter, onFilter, user, onAction }) {
+function CalendarView({
+  requests,
+  month,
+  onMonthChange,
+  search,
+  onSearch,
+  operators,
+  facets,
+  onFacetsChange,
+}) {
+  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
+  const gridStart = new Date(firstDay);
+  gridStart.setDate(firstDay.getDate() - ((firstDay.getDay() + 6) % 7));
+  const days = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    return date;
+  });
+  const eventsByDate = new Map();
+  function addEvent(date, event) {
+    if (!date) return;
+    const events = eventsByDate.get(date) || [];
+    events.push(event);
+    eventsByDate.set(date, events);
+  }
+  requests.forEach((item) => {
+    if (item.scheduled_date) {
+      addEvent(String(item.scheduled_date).slice(0, 10), {
+        type: "scheduled",
+        item,
+      });
+    }
+    if (item.due_date) {
+      addEvent(String(item.due_date).slice(0, 10), {
+        type: "deadline",
+        item,
+      });
+    }
+  });
+  const todayKey = dateKey(new Date());
+  const title = new Intl.DateTimeFormat("fr-FR", {
+    month: "long",
+    year: "numeric",
+  }).format(month);
+
+  return (
+    <section className="calendar-view" aria-labelledby="calendar-title">
+      <div className="calendar-heading">
+        <div>
+          <p className="eyebrow">VUE PLANNING</p>
+          <h2 id="calendar-title">Calendrier des essais</h2>
+          <p className="section-description">
+            Retrouvez les dates planifiées et les échéances maximales de chaque demande.
+          </p>
+        </div>
+        <div className="calendar-tools">
+          <label className="search-control calendar-search">
+            <span aria-hidden="true">⌕</span>
+            <span className="sr-only">Rechercher un essai du calendrier</span>
+            <input
+              type="search"
+              placeholder="Référence, responsable…"
+              value={search}
+              onChange={(event) => onSearch(event.target.value)}
+            />
+          </label>
+          <div className="calendar-navigation" aria-label="Navigation du calendrier">
+            <button
+              className="button button-secondary calendar-arrow"
+              aria-label="Mois précédent"
+              onClick={() => onMonthChange((current) => addMonths(current, -1))}
+            >
+              ‹
+            </button>
+            <strong aria-live="polite">{title}</strong>
+            <button
+              className="button button-secondary calendar-arrow"
+              aria-label="Mois suivant"
+              onClick={() => onMonthChange((current) => addMonths(current, 1))}
+            >
+              ›
+            </button>
+            <button
+              className="button button-quiet calendar-today"
+              onClick={() => onMonthChange(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}
+            >
+              Aujourd’hui
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="calendar-legend" aria-label="Légende">
+        <span><i className="calendar-dot calendar-dot-scheduled" /> Test planifié</span>
+        <span><i className="calendar-dot calendar-dot-deadline" /> Échéance maximale</span>
+      </div>
+      <FacetFilters operators={operators} facets={facets} onChange={onFacetsChange} />
+      <div className="calendar-grid" role="grid" aria-labelledby="calendar-title">
+        {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((weekday) => (
+          <div className="calendar-weekday" role="columnheader" key={weekday}>{weekday}</div>
+        ))}
+        {days.map((date) => {
+          const key = dateKey(date);
+          const events = eventsByDate.get(key) || [];
+          return (
+            <div
+              className={[
+                "calendar-day",
+                date.getMonth() !== month.getMonth() ? "is-outside-month" : "",
+                key === todayKey ? "is-today" : "",
+              ].filter(Boolean).join(" ")}
+              role="gridcell"
+              aria-label={`${date.toLocaleDateString("fr-FR", { dateStyle: "full" })}, ${events.length} jalon${events.length > 1 ? "s" : ""}`}
+              key={key}
+            >
+              <span className="calendar-day-number">{date.getDate()}</span>
+              <div className="calendar-day-events">
+                {events.slice(0, 3).map(({ item, type }, index) => (
+                  <div
+                    className={`calendar-event calendar-event-${type}`}
+                    title={`${item.product_reference} — ${type === "scheduled" ? "test planifié" : "échéance maximale"} · ${item.assigned_operator_name || "Non assignée"}`}
+                    key={`${item.id}-${type}-${index}`}
+                  >
+                    <strong>{item.product_reference}</strong>
+                    <span>{type === "scheduled" ? "Test" : "Échéance max."}</span>
+                  </div>
+                ))}
+                {events.length > 3 && (
+                  <small className="calendar-more">+{events.length - 3} autres</small>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function TrialDashboard({
+  requests,
+  operators,
+  facets,
+  onFacetsChange,
+  search,
+  onSearch,
+  filter,
+  onFilter,
+  user,
+  onAction,
+}) {
   const [expandedRequestId, setExpandedRequestId] = useState("");
   const query = search.trim().toLocaleLowerCase("fr");
-  const urgencyRequests = requests
-    .map((item) => ({ item, urgency: getDateUrgency(item) }))
-    .filter(({ urgency }) => urgency)
-    .sort((left, right) => left.urgency.daysUntilDue - right.urgency.daysUntilDue);
   const filteredRequests = requests
     .filter((item) => {
+      if (facets.category !== "all" && item.product_category !== facets.category) {
+        return false;
+      }
+      if (facets.priority !== "all" && item.priority !== facets.priority) {
+        return false;
+      }
+      if (
+        facets.operator !== "all" &&
+        (facets.operator === "unassigned"
+          ? Boolean(item.assigned_operator_id)
+          : item.assigned_operator_id !== facets.operator)
+      ) {
+        return false;
+      }
       if (filter === "todo" && item.status !== "requested") return false;
       if (filter === "active" && !["scheduled", "in_progress"].includes(item.status)) {
         return false;
@@ -492,6 +721,10 @@ function TrialDashboard({ requests, search, onSearch, filter, onFilter, user, on
         (getDateUrgency(right)?.daysUntilDue ?? Number.POSITIVE_INFINITY);
       return urgencyDifference || new Date(left.due_date) - new Date(right.due_date);
     });
+  const urgencyRequests = filteredRequests
+    .map((item) => ({ item, urgency: getDateUrgency(item) }))
+    .filter(({ urgency }) => urgency)
+    .sort((left, right) => left.urgency.daysUntilDue - right.urgency.daysUntilDue);
   const countFor = (statuses) =>
     requests.filter((item) => statuses.includes(item.status)).length;
   const counts = {
@@ -512,29 +745,8 @@ function TrialDashboard({ requests, search, onSearch, filter, onFilter, user, on
           <p className="section-description">
             Les échéances proches et en retard sont signalées en priorité.
           </p>
-          <p className="trial-history-hint">
-            « Passées » regroupe les essais réalisés, à valider ou déjà validés.
-          </p>
         </div>
         <span className="trial-total">{requests.length} demande{requests.length > 1 ? "s" : ""}</span>
-      </div>
-
-      <div className="trial-summary-grid" aria-label="Demandes par état">
-        <article className="trial-summary trial-summary-todo">
-          <span>À faire</span><strong>{counts.todo}</strong>
-        </article>
-        <article className="trial-summary trial-summary-active">
-          <span>En cours</span><strong>{counts.active}</strong>
-        </article>
-        <article className="trial-summary trial-summary-review">
-          <span>À valider</span><strong>{counts.pending_validation}</strong>
-        </article>
-        <article className="trial-summary trial-summary-done">
-          <span>Tests passés</span><strong>{counts.past}</strong>
-        </article>
-        <article className="trial-summary trial-summary-done">
-          <span>Validées</span><strong>{counts.done}</strong>
-        </article>
       </div>
 
       {urgencyRequests.length > 0 && (
@@ -574,6 +786,7 @@ function TrialDashboard({ requests, search, onSearch, filter, onFilter, user, on
             </button>
           ))}
         </div>
+        <FacetFilters operators={operators} facets={facets} onChange={onFacetsChange} />
         <label className="search-control">
           <span aria-hidden="true">⌕</span>
           <span className="sr-only">Rechercher un essai</span>
