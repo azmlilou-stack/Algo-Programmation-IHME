@@ -96,6 +96,8 @@ h1, h2, h3 { font-family: "Manrope", sans-serif; }
 .priority-normal { color: #78847f; }
 .priority-low { color: #678875; }
 .result-note { margin-top: 14px; padding: 10px 12px; border-radius: 7px; font-size: 12px; }
+.result-note { display: grid; justify-items: start; gap: 5px; }
+.result-verdict { font-weight: 700; }
 .result-ok { background: #eff7f0; color: #396e49; }
 .result-fail { background: #fff1ee; color: #a64e43; }
 .request-actions { margin-top: 16px; padding-top: 14px; border-top: 1px solid #f0f2f0; }
@@ -119,6 +121,13 @@ h1, h2, h3 { font-family: "Manrope", sans-serif; }
 .modal-heading h2 { margin: 0; font-size: 21px; }
 .close-button { width: 31px; height: 31px; border: 0; border-radius: 7px; background: #f2f5f3; color: #61716a; font-size: 22px; }
 .request-form, .auth-form { display: grid; gap: 15px; }
+.request-form-error { display: grid; gap: 4px; }
+.request-preview { padding: 14px; border: 1px solid #dfe9e1; border-radius: 9px; background: #f7faf7; }
+.request-preview .eyebrow { margin-bottom: 10px; }
+.request-preview dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
+.request-preview dl > div { min-width: 0; }
+.request-preview dt { color: #78847f; font-size: 10px; }
+.request-preview dd { margin: 3px 0 0; overflow-wrap: anywhere; color: #34443c; font-size: 12px; font-weight: 600; }
 .request-form input, .request-form select, .auth-form input { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid #dfe7e1; border-radius: 8px; outline: none; color: #263b32; background: white; font-size: 13px; }
 .request-form input:focus, .request-form select:focus, .auth-form input:focus { border-color: #69957c; box-shadow: 0 0 0 3px #245c4915; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
@@ -452,6 +461,9 @@ html[data-theme="dark"] .credential-notice { color: #d3ead7; border-color: #3652
 html[data-theme="dark"] .credential-notice p { color: #a8c1ad; }
 html[data-theme="dark"] .temporary-password { background: #2a4331; }
 html[data-theme="dark"] .password-description { color: #a3b0a6; }
+html[data-theme="dark"] .request-preview { border-color: #334239; background: #151f19; }
+html[data-theme="dark"] .request-preview dd { color: #e0e9e2; }
+html[data-theme="dark"] .request-preview dt { color: #9aa99f; }
 @keyframes rise-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }

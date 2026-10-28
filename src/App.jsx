@@ -909,11 +909,15 @@ function RequestCard({ item, user, onAction }) {
           )}
         </div>
         {item.result_verdict && (
-          <div className={`result-note ${item.result_verdict === "conforming" ? "result-ok" : "result-fail"}`}>
-            <strong>
+          <div
+            className={`result-note ${item.result_verdict === "conforming" ? "result-ok" : "result-fail"}`}
+            aria-label="Résultat de l’essai"
+          >
+            <strong>Résultat de l’essai</strong>
+            <span className="result-verdict">
               {item.result_verdict === "conforming" ? "Conforme" : "Non conforme"}
-            </strong>
-            {item.result_comment && <span> — {item.result_comment}</span>}
+            </span>
+            {item.result_comment && <span>Commentaire : {item.result_comment}</span>}
           </div>
         )}
       </div>
@@ -1023,6 +1027,14 @@ function RequestModal({ operators, onClose, onSubmit }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const activeOperators = operators.filter((operator) => operator.activated);
+  const selectedOperator = activeOperators.find(
+    (operator) => operator.id === form.assignedOperatorId,
+  );
+
+  function updateField(field, value) {
+    setForm((currentForm) => ({ ...currentForm, [field]: value }));
+    setError("");
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -1053,7 +1065,12 @@ function RequestModal({ operators, onClose, onSubmit }) {
           </div>
           <button className="close-button" onClick={onClose} aria-label="Fermer">×</button>
         </div>
-        {error && <div className="alert alert-error">{error}</div>}
+        {error && (
+          <div className="alert alert-error request-form-error" role="alert">
+            <strong>La demande n’a pas pu être créée.</strong>
+            <span>{error}</span>
+          </div>
+        )}
         <form className="request-form" onSubmit={submit}>
           <label>
             Référence produit
@@ -1061,7 +1078,7 @@ function RequestModal({ operators, onClose, onSubmit }) {
               required
               maxLength="120"
               value={form.productReference}
-              onChange={(event) => setForm({ ...form, productReference: event.target.value })}
+              onChange={(event) => updateField("productReference", event.target.value)}
               placeholder="Ex. PRD-2026-014"
             />
           </label>
@@ -1074,17 +1091,16 @@ function RequestModal({ operators, onClose, onSubmit }) {
                 max="10000"
                 required
                 value={form.quantity}
-                onChange={(event) => setForm({ ...form, quantity: event.target.value })}
+                onChange={(event) => updateField("quantity", event.target.value)}
               />
+              <small className="field-hint">Nombre d’échantillons, de 1 à 10 000.</small>
             </label>
             <label>
               Catégorie du produit
               <select
                 required
                 value={form.productCategory}
-                onChange={(event) =>
-                  setForm({ ...form, productCategory: event.target.value })
-                }
+                onChange={(event) => updateField("productCategory", event.target.value)}
               >
                 <option value="">Choisir une catégorie</option>
                 {PRODUCT_CATEGORIES.map((category) => (
@@ -1097,7 +1113,7 @@ function RequestModal({ operators, onClose, onSubmit }) {
             Famille de test
             <select
               value={form.testFamily}
-              onChange={(event) => setForm({ ...form, testFamily: event.target.value })}
+              onChange={(event) => updateField("testFamily", event.target.value)}
             >
               {TEST_FAMILIES.map((family) => <option key={family}>{family}</option>)}
             </select>
@@ -1110,14 +1126,14 @@ function RequestModal({ operators, onClose, onSubmit }) {
                 required
                 min={new Date().toISOString().slice(0, 10)}
                 value={form.dueDate}
-                onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
+                onChange={(event) => updateField("dueDate", event.target.value)}
               />
             </label>
             <label>
               Priorité
               <select
                 value={form.priority}
-                onChange={(event) => setForm({ ...form, priority: event.target.value })}
+                onChange={(event) => updateField("priority", event.target.value)}
               >
                 <option value="low">Basse</option>
                 <option value="normal">Normale</option>
@@ -1131,9 +1147,7 @@ function RequestModal({ operators, onClose, onSubmit }) {
             <select
               value={form.assignedOperatorId}
               disabled={activeOperators.length === 0}
-              onChange={(event) =>
-                setForm({ ...form, assignedOperatorId: event.target.value })
-              }
+              onChange={(event) => updateField("assignedOperatorId", event.target.value)}
             >
               <option value="">Laisser la demande ouverte à l’équipe</option>
               {activeOperators.map((operator) => (
@@ -1149,6 +1163,25 @@ function RequestModal({ operators, onClose, onSubmit }) {
               </small>
             )}
           </label>
+          <aside className="request-preview" aria-live="polite" aria-label="Résumé de la demande">
+            <p className="eyebrow">RÉSUMÉ DE LA DEMANDE</p>
+            <dl>
+              <div><dt>Produit</dt><dd>{form.productReference.trim() || "À renseigner"}</dd></div>
+              <div>
+                <dt>Quantité</dt>
+                <dd>
+                  {form.quantity
+                    ? `${form.quantity} échantillon${Number(form.quantity) > 1 ? "s" : ""}`
+                    : "À renseigner"}
+                </dd>
+              </div>
+              <div><dt>Catégorie</dt><dd>{form.productCategory || "À choisir"}</dd></div>
+              <div><dt>Essai</dt><dd>{form.testFamily}</dd></div>
+              <div><dt>Échéance</dt><dd>{formatDate(form.dueDate)}</dd></div>
+              <div><dt>Priorité</dt><dd>{PRIORITY_LABELS[form.priority]}</dd></div>
+              <div><dt>Responsable</dt><dd>{selectedOperator?.name || "Équipe laboratoire"}</dd></div>
+            </dl>
+          </aside>
           <div className="modal-actions">
             <button type="button" className="button button-quiet" onClick={onClose}>Annuler</button>
             <button className="button button-primary" disabled={saving}>

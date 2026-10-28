@@ -165,6 +165,16 @@ npm run build
 
 La route `GET /api/health` vérifie la disponibilité de PostgreSQL et renvoie uniquement un état de santé.
 
+### Démonstration du jalon React
+
+Faites réaliser ce scénario par une autre personne, sans lui indiquer où cliquer :
+
+1. Connectez-vous avec un compte **ingénieur produit** et ouvrez **Créer une demande**.
+2. Saisissez une référence, une quantité d’échantillons, une catégorie, une famille de test, une échéance et une priorité. Faites remarquer que le résumé affiche immédiatement les valeurs choisies et l’unité « échantillon(s) ».
+3. Créez la demande et vérifiez qu’elle apparaît dans **Mes demandes**, avec sa quantité, son statut et son échéance lisibles.
+4. Connectez-vous avec un compte **ingénieur essais**. Planifiez la demande, démarrez l’essai, puis envoyez un verdict avec un commentaire. Vérifiez que le résultat est affiché avec son intitulé et son commentaire.
+5. Testez le retour d’erreur, par exemple en soumettant une demande invalide via l’API ou en simulant une indisponibilité réseau ; le formulaire doit afficher un message explicite sans effacer les valeurs saisies.
+
 ## Déploiement sur le serveur du cours
 
 Le dépôt contient le Dockerfile, le client de déploiement et les workflows GitHub Actions correspondant au contrat du cours :
