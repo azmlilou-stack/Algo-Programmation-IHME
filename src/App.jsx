@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import labTestingIllustration from "./assets/lab-testing.svg";
+import helmetIllustration from "./assets/bike-helmet.svg";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`;
 const TEST_FAMILIES = ["Impact", "Thermique", "Mécanique"];
@@ -936,9 +937,14 @@ function AuthScreen({ onAuthenticated, serverError, theme, onToggleTheme }) {
           <span><strong>LABORATOIRE</strong><small>Suivi des tests produit</small></span>
         </a>
         <div className="auth-message">
-          <p className="eyebrow">DEMANDE · ESSAI · VALIDATION</p>
-          <h1>Les bons tests,<br />au bon moment.</h1>
-          <p>Un espace partagé pour suivre chaque essai laboratoire, du besoin produit au résultat validé.</p>
+          <div className="auth-message-copy">
+            <p className="eyebrow">DEMANDE · ESSAI · VALIDATION</p>
+            <h1>Les bons tests,<br />au bon moment.</h1>
+            <p>Un espace partagé pour suivre chaque essai laboratoire, du besoin produit au résultat validé.</p>
+          </div>
+          <div className="auth-helmet" aria-hidden="true">
+            <img src={helmetIllustration} alt="" />
+          </div>
         </div>
         <p className="auth-caption">Impact · Thermique · Mécanique</p>
       </div>
