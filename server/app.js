@@ -201,8 +201,13 @@ export function createApp(db, options = {}) {
   app.post("/api/auth/login", authRateLimit, async (req, res, next) => {
     try {
       const body = req.body || {};
+      const expectedRole =
+        typeof body.expectedRole === "string" ? body.expectedRole : "";
       const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
       const password = typeof body.password === "string" ? body.password : "";
+      if (expectedRole && !["engineer", "operator"].includes(expectedRole)) {
+        throw httpError(400, "Le profil de connexion n’est pas reconnu.");
+      }
       if (!EMAIL_PATTERN.test(email) || password.length > 72) {
         throw httpError(400, "Adresse e-mail ou mot de passe invalide.");
       }
@@ -214,6 +219,14 @@ export function createApp(db, options = {}) {
       const user = found.rows[0];
       if (!user?.password_hash || !(await bcrypt.compare(password, user.password_hash))) {
         throw httpError(401, "Adresse e-mail ou mot de passe incorrect.");
+      }
+      if (expectedRole && user.role !== expectedRole) {
+        throw httpError(
+          403,
+          expectedRole === "engineer"
+            ? "Ce compte est enregistré comme ingénieur essais. Choisissez ce profil pour vous connecter."
+            : "Ce compte est enregistré comme ingénieur produit. Choisissez ce profil pour vous connecter.",
+        );
       }
       await createSession(db, user.id, res, secureCookie, cookiePath);
       res.json({

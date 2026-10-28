@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import labTestingIllustration from "./assets/lab-testing.svg";
 import helmetIllustration from "./assets/bike-helmet.svg";
 
@@ -24,6 +24,33 @@ const REQUEST_FILTERS = [
   { value: "pending_validation", label: "À valider" },
   { value: "done", label: "Terminées" },
 ];
+const TRIAL_TABLE_FILTERS = [
+  { value: "all", label: "Toutes" },
+  { value: "todo", label: "À faire" },
+  { value: "active", label: "En cours" },
+  { value: "pending_validation", label: "À valider" },
+  { value: "past", label: "Passées" },
+  { value: "done", label: "Validées" },
+];
+const URGENT_WITHIN_DAYS = 7;
+
+function getDateUrgency(request) {
+  if (["pending_validation", "done"].includes(request.status)) return null;
+  const due = new Date(`${request.due_date}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysUntilDue = Math.ceil((due.getTime() - today.getTime()) / 86_400_000);
+  return daysUntilDue < 0
+    ? { daysUntilDue, label: `En retard de ${Math.abs(daysUntilDue)} j`, overdue: true }
+    : daysUntilDue <= URGENT_WITHIN_DAYS
+      ? { daysUntilDue, label: `Échéance dans ${daysUntilDue} j`, overdue: false }
+      : null;
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  return new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString("fr-FR");
+}
 
 function getInitialTheme() {
   try {
@@ -68,6 +95,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState("all");
+  const [tableFilter, setTableFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [activatingOperatorId, setActivatingOperatorId] = useState("");
@@ -227,7 +255,7 @@ function App() {
           <span className="avatar">{user.name.slice(0, 1).toUpperCase()}</span>
           <span className="account-copy">
             <strong>{user.name}</strong>
-            <small>{isOperator ? "Opérateur laboratoire" : "Ingénieur produit"}</small>
+            <small>{isOperator ? "Ingénieur essais" : "Ingénieur produit"}</small>
           </span>
           <button
             className="button button-quiet"
@@ -260,16 +288,16 @@ function App() {
         />
       </section>
 
-      <section className="welcome">
+      <section className={`welcome${isOperator ? " welcome-trials" : ""}`}>
         <div className="welcome-copy">
-          <p className="eyebrow">ESPACE {isOperator ? "LABORATOIRE" : "PRODUIT"}</p>
+          <p className="eyebrow">ESPACE {isOperator ? "INGÉNIEUR ESSAIS" : "PRODUIT"}</p>
           <h1>
             Bonjour, {user.name.split(" ")[0]}
             <span className="welcome-period">.</span>
           </h1>
           <p className="welcome-description">
             {isOperator
-              ? "Vos prochains essais et résultats, réunis au même endroit."
+              ? "Pilotez les essais, leurs échéances et les résultats du laboratoire."
               : "De la demande au résultat validé, gardez un œil sur chaque essai."}
           </p>
           <div className="welcome-note">
@@ -289,23 +317,33 @@ function App() {
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      <section className="summary-grid" aria-label="Résumé des demandes">
-        {metrics.map((metric, index) => (
-          <SummaryCard key={metric.label} {...metric} index={index} />
-        ))}
-      </section>
-
-      {!isOperator && (
-        <OperatorManagement
-          operators={operators}
-          activatingOperatorId={activatingOperatorId}
-          temporaryCredentials={temporaryCredentials}
-          onActivate={activateOperator}
-          onDismissCredentials={() => setTemporaryCredentials(null)}
+      {isOperator ? (
+        <TrialDashboard
+          requests={requests}
+          search={search}
+          onSearch={setSearch}
+          filter={tableFilter}
+          onFilter={setTableFilter}
+          user={user}
+          onAction={perform}
         />
-      )}
+      ) : (
+        <>
+          <section className="summary-grid" aria-label="Résumé des demandes">
+            {metrics.map((metric, index) => (
+              <SummaryCard key={metric.label} {...metric} index={index} />
+            ))}
+          </section>
 
-      <section className="list-section">
+          <OperatorManagement
+            operators={operators}
+            activatingOperatorId={activatingOperatorId}
+            temporaryCredentials={temporaryCredentials}
+            onActivate={activateOperator}
+            onDismissCredentials={() => setTemporaryCredentials(null)}
+          />
+
+          <section className="list-section">
         <div className="section-heading">
           <div>
             <p className="eyebrow">SUIVI DU LABORATOIRE</p>
@@ -382,7 +420,9 @@ function App() {
             </p>
           </div>
         )}
-      </section>
+          </section>
+        </>
+      )}
 
       {showForm && (
         <RequestModal
@@ -412,6 +452,224 @@ function SummaryCard({ label, value, icon, tone, index }) {
         <strong>{value}</strong>
       </div>
     </article>
+  );
+}
+
+function TrialDashboard({ requests, search, onSearch, filter, onFilter, user, onAction }) {
+  const [expandedRequestId, setExpandedRequestId] = useState("");
+  const query = search.trim().toLocaleLowerCase("fr");
+  const urgencyRequests = requests
+    .map((item) => ({ item, urgency: getDateUrgency(item) }))
+    .filter(({ urgency }) => urgency)
+    .sort((left, right) => left.urgency.daysUntilDue - right.urgency.daysUntilDue);
+  const filteredRequests = requests
+    .filter((item) => {
+      if (filter === "todo" && item.status !== "requested") return false;
+      if (filter === "active" && !["scheduled", "in_progress"].includes(item.status)) {
+        return false;
+      }
+      if (filter === "pending_validation" && item.status !== "pending_validation") {
+        return false;
+      }
+      if (filter === "past" && !["pending_validation", "done"].includes(item.status)) {
+        return false;
+      }
+      if (filter === "done" && item.status !== "done") return false;
+      if (!query) return true;
+      return [
+        item.product_reference,
+        item.product_category,
+        item.test_family,
+        item.requester_name,
+        item.assigned_operator_name,
+      ]
+        .filter(Boolean)
+        .some((value) => value.toLocaleLowerCase("fr").includes(query));
+    })
+    .sort((left, right) => {
+      const urgencyDifference =
+        (getDateUrgency(left)?.daysUntilDue ?? Number.POSITIVE_INFINITY) -
+        (getDateUrgency(right)?.daysUntilDue ?? Number.POSITIVE_INFINITY);
+      return urgencyDifference || new Date(left.due_date) - new Date(right.due_date);
+    });
+  const countFor = (statuses) =>
+    requests.filter((item) => statuses.includes(item.status)).length;
+  const counts = {
+    all: requests.length,
+    todo: countFor(["requested"]),
+    active: countFor(["scheduled", "in_progress"]),
+    pending_validation: countFor(["pending_validation"]),
+    past: countFor(["pending_validation", "done"]),
+    done: countFor(["done"]),
+  };
+
+  return (
+    <section className="trial-dashboard" aria-labelledby="trials-title">
+      <div className="trial-dashboard-heading">
+        <div>
+          <p className="eyebrow">PILOTAGE DES ESSAIS</p>
+          <h2 id="trials-title">Tableau des demandes</h2>
+          <p className="section-description">
+            Les échéances proches et en retard sont signalées en priorité.
+          </p>
+          <p className="trial-history-hint">
+            « Passées » regroupe les essais réalisés, à valider ou déjà validés.
+          </p>
+        </div>
+        <span className="trial-total">{requests.length} demande{requests.length > 1 ? "s" : ""}</span>
+      </div>
+
+      <div className="trial-summary-grid" aria-label="Demandes par état">
+        <article className="trial-summary trial-summary-todo">
+          <span>À faire</span><strong>{counts.todo}</strong>
+        </article>
+        <article className="trial-summary trial-summary-active">
+          <span>En cours</span><strong>{counts.active}</strong>
+        </article>
+        <article className="trial-summary trial-summary-review">
+          <span>À valider</span><strong>{counts.pending_validation}</strong>
+        </article>
+        <article className="trial-summary trial-summary-done">
+          <span>Tests passés</span><strong>{counts.past}</strong>
+        </article>
+        <article className="trial-summary trial-summary-done">
+          <span>Validées</span><strong>{counts.done}</strong>
+        </article>
+      </div>
+
+      {urgencyRequests.length > 0 && (
+        <aside className="deadline-alert" aria-live="polite">
+          <span className="deadline-alert-icon" aria-hidden="true">!</span>
+          <div>
+            <strong>
+              {urgencyRequests.length} demande{urgencyRequests.length > 1 ? "s" : ""} à traiter rapidement
+            </strong>
+            <ul>
+              {urgencyRequests.slice(0, 4).map(({ item, urgency }) => (
+                <li key={item.id}>
+                  <span>{item.product_reference}</span>
+                  <strong className={urgency.overdue ? "is-overdue" : ""}>
+                    {urgency.label}
+                  </strong>
+                </li>
+              ))}
+            </ul>
+            {urgencyRequests.length > 4 && (
+              <small>Et {urgencyRequests.length - 4} autre{urgencyRequests.length - 4 > 1 ? "s" : ""} demande{urgencyRequests.length - 4 > 1 ? "s" : ""} à échéance proche.</small>
+            )}
+          </div>
+        </aside>
+      )}
+
+      <div className="trial-table-toolbar">
+        <div className="trial-filters" role="group" aria-label="Filtrer les demandes">
+          {TRIAL_TABLE_FILTERS.map((item) => (
+            <button
+              key={item.value}
+              className={`trial-filter${filter === item.value ? " is-active" : ""}`}
+              aria-pressed={filter === item.value}
+              onClick={() => onFilter(item.value)}
+            >
+              {item.label}<span>{counts[item.value]}</span>
+            </button>
+          ))}
+        </div>
+        <label className="search-control">
+          <span aria-hidden="true">⌕</span>
+          <span className="sr-only">Rechercher un essai</span>
+          <input
+            type="search"
+            placeholder="Référence, catégorie, demandeur…"
+            value={search}
+            onChange={(event) => onSearch(event.target.value)}
+          />
+        </label>
+      </div>
+
+      {filteredRequests.length ? (
+        <div className="trial-table-scroll">
+          <table className="trial-table">
+            <thead>
+              <tr>
+                <th scope="col">Demande / essai</th>
+                <th scope="col">Demandeur</th>
+                <th scope="col">Créée le</th>
+                <th scope="col">Planifiée le</th>
+                <th scope="col">Échéance</th>
+                <th scope="col">Résultat envoyé</th>
+                <th scope="col">Validée le</th>
+                <th scope="col">État</th>
+                <th scope="col">Priorité</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRequests.map((item) => {
+                const urgency = getDateUrgency(item);
+                const expanded = expandedRequestId === item.id;
+                return (
+                  <Fragment key={item.id}>
+                    <tr className={urgency?.overdue ? "trial-row-overdue" : ""}>
+                      <td>
+                        <strong className="trial-reference">{item.product_reference}</strong>
+                        <span className="trial-description">
+                          {item.product_category || "Catégorie non renseignée"} · {item.test_family}
+                        </span>
+                      </td>
+                      <td>{item.requester_name}</td>
+                      <td>{formatDate(item.created_at)}</td>
+                      <td>{formatDate(item.scheduled_date)}</td>
+                      <td>
+                        <span>{formatDate(item.due_date)}</span>
+                        {urgency && (
+                          <small className={`trial-deadline${urgency.overdue ? " is-overdue" : ""}`}>
+                            {urgency.label}
+                          </small>
+                        )}
+                      </td>
+                      <td>{formatDate(item.submitted_at)}</td>
+                      <td>{formatDate(item.validated_at)}</td>
+                      <td>
+                        <span className={`status status-${item.status}`}>
+                          <span className="status-dot" />{STATUS_LABELS[item.status]}
+                        </span>
+                      </td>
+                      <td><span className={`priority priority-${item.priority}`}>{PRIORITY_LABELS[item.priority]}</span></td>
+                      <td>
+                        <button
+                          className="button button-secondary trial-actions-button"
+                          aria-expanded={expanded}
+                          onClick={() => setExpandedRequestId(expanded ? "" : item.id)}
+                        >
+                          {expanded ? "Fermer" : "Détails / actions"}
+                        </button>
+                      </td>
+                    </tr>
+                    {expanded && (
+                      <tr className="trial-expanded-row">
+                        <td colSpan="10">
+                          <RequestCard item={item} user={user} onAction={onAction} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state trial-empty-state">
+          <span className="empty-icon">{search ? "⌕" : "✳"}</span>
+          <h3>{search ? "Aucune demande ne correspond" : "Aucune demande dans cette sélection"}</h3>
+          <p>
+            {search
+              ? "Essayez une autre référence, catégorie ou nom de demandeur."
+              : "Les demandes correspondant à ce statut apparaîtront ici."}
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -556,7 +814,7 @@ function PasswordChangeScreen({ user, theme, onToggleTheme, onChanged }) {
         </a>
         <div className="account">
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-          <span className="account-copy"><strong>{user.name}</strong><small>Compte opérateur</small></span>
+          <span className="account-copy"><strong>{user.name}</strong><small>Ingénieur essais</small></span>
         </div>
       </header>
       <section className="password-card">
@@ -905,6 +1163,7 @@ function RequestModal({ operators, onClose, onSubmit }) {
 
 function AuthScreen({ onAuthenticated, serverError, theme, onToggleTheme }) {
   const [mode, setMode] = useState("login");
+  const [selectedRole, setSelectedRole] = useState("engineer");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -919,7 +1178,12 @@ function AuthScreen({ onAuthenticated, serverError, theme, onToggleTheme }) {
       const path = mode === "login" ? "/auth/login" : "/auth/register";
       const payload = await api(path, {
         method: "POST",
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          ...(mode === "login" ? { expectedRole: selectedRole } : {}),
+        }),
       });
       onAuthenticated(payload.user);
     } catch (caught) {
@@ -960,6 +1224,31 @@ function AuthScreen({ onAuthenticated, serverError, theme, onToggleTheme }) {
               ? "Connectez-vous pour retrouver votre activité."
               : "L’inscription est réservée aux ingénieurs produits."}
           </p>
+          {mode === "login" && (
+            <fieldset className="role-picker">
+              <legend>Vous vous connectez en tant que</legend>
+              <div className="role-options">
+                <button
+                  type="button"
+                  className={`role-option${selectedRole === "engineer" ? " is-selected" : ""}`}
+                  aria-pressed={selectedRole === "engineer"}
+                  onClick={() => setSelectedRole("engineer")}
+                >
+                  <span className="role-option-icon" aria-hidden="true">⌁</span>
+                  <span><strong>Ingénieur produit</strong><small>Créer et valider des demandes</small></span>
+                </button>
+                <button
+                  type="button"
+                  className={`role-option${selectedRole === "operator" ? " is-selected" : ""}`}
+                  aria-pressed={selectedRole === "operator"}
+                  onClick={() => setSelectedRole("operator")}
+                >
+                  <span className="role-option-icon" aria-hidden="true">⚗</span>
+                  <span><strong>Ingénieur essais</strong><small>Planifier et suivre les tests</small></span>
+                </button>
+              </div>
+            </fieldset>
+          )}
           {(error || serverError) && (
             <div className="alert alert-error">{error || serverError}</div>
           )}
@@ -995,6 +1284,7 @@ function AuthScreen({ onAuthenticated, serverError, theme, onToggleTheme }) {
             <button
               onClick={() => {
                 setMode(mode === "login" ? "register" : "login");
+                setSelectedRole("engineer");
                 setError("");
               }}
             >

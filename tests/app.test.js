@@ -369,6 +369,50 @@ describe("API", () => {
     assert.match(response.body.error, /disponible à la planification/);
   });
 
+  it("vérifie le profil sélectionné avant d’ouvrir une session de connexion", async () => {
+    const password = "mot-de-passe-essais-solide";
+    const passwordHash = await bcrypt.hash(password, 4);
+    let sessionCreated = false;
+    const loginDb = {
+      async query(sql) {
+        if (sql.includes("FROM users WHERE email = $1")) {
+          return {
+            rows: [{
+              id: "ea8fc84b-ecc8-4ea6-9c88-ef62c0e72011",
+              name: "Thibaut",
+              email: "test+thibaut@decathlon.com",
+              password_hash: passwordHash,
+              role: "operator",
+              must_change_password: false,
+            }],
+          };
+        }
+        if (sql.includes("INSERT INTO sessions")) {
+          sessionCreated = true;
+          return { rows: [], rowCount: 1 };
+        }
+        throw new Error(`Requête non simulée dans ce test : ${sql}`);
+      },
+    };
+    const loginApp = createApp(loginDb, {
+      secureCookie: false,
+      staticDirectory: "/tmp/ihme-test-static",
+    });
+
+    await request(loginApp)
+      .post("/api/auth/login")
+      .send({ email: "test+thibaut@decathlon.com", password, expectedRole: "engineer" })
+      .expect(403);
+    assert.equal(sessionCreated, false);
+
+    const response = await request(loginApp)
+      .post("/api/auth/login")
+      .send({ email: "test+thibaut@decathlon.com", password, expectedRole: "operator" })
+      .expect(200);
+    assert.equal(response.body.user.role, "operator");
+    assert.equal(sessionCreated, true);
+  });
+
   it("crée uniquement un compte ingénieur et gère une session jusqu’à la déconnexion", async () => {
     const storedSessions = new Set();
     const user = {
